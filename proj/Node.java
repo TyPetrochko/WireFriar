@@ -140,19 +140,22 @@ public class Node {
     }
 
     private void receivePacket(int from, Packet packet) {
-	switch(packet.getProtocol()) {
+    	switch(packet.getProtocol()) {
 
-	case Protocol.PING_PKT:
-	    this.receivePing(packet);
-	    break;
+    	case Protocol.PING_PKT:
+    	    this.receivePing(packet);
+    	    break;
 
-	case Protocol.PING_REPLY_PKT:
-	    this.receivePingReply(packet);
-	    break;
+    	case Protocol.PING_REPLY_PKT:
+    	    this.receivePingReply(packet);
+    	    break;
 
-	default:
-	    logError("Packet with unknown protocol received. Protocol: " + packet.getProtocol());
-	}
+        case Protocol.TRANSPORT_PKT:
+            this.tcpMan.receivePacket(from, packet);
+            break;
+    	default:
+    	    logError("Packet with unknown protocol received. Protocol: " + packet.getProtocol());
+    	}
     }
 
     private void receivePing(Packet packet) {

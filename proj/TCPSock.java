@@ -12,6 +12,11 @@
  */
 
 public class TCPSock {
+    private TCPManager tcpMan;
+    private int foreignAddress;
+    private int foreignPort;
+    private int localAddress;
+    private int localPort;
     // TCP socket states
     enum State {
         // protocol states
@@ -23,7 +28,12 @@ public class TCPSock {
     }
     private State state;
 
-    public TCPSock() {
+    public TCPSock(TCPManager tcpMan) {
+        this.tcpMan = tcpMan;
+        this.foreignAddress = -1;
+        this.foreignPort = -1;
+        this.localAddress = -1;
+        this.localPort = -1;
     }
 
     /*
@@ -38,7 +48,13 @@ public class TCPSock {
      * @return int 0 on success, -1 otherwise
      */
     public int bind(int localPort) {
-        return -1;
+        if(tcpMan.bind(this, localPort) == 0){
+            localAddress = tcpMan.getAddress();
+            this.localPort = localPort;
+            return 0;
+        }else{
+            return -1;
+        }
     }
 
     /**
@@ -47,7 +63,14 @@ public class TCPSock {
      * @return int 0 on success, -1 otherwise
      */
     public int listen(int backlog) {
-        return -1;
+        if(!isBound()){
+            Debug.log("TCPSock: Could not listen (not bound)");
+            return -1;
+        }else{
+            this.state = State.LISTEN;
+            Debug.log("TCPSock: Socket now listening on port " + localPort);
+            return 0;
+        }
     }
 
     /**
@@ -57,6 +80,10 @@ public class TCPSock {
      */
     public TCPSock accept() {
         return null;
+    }
+
+    public boolean isBound(){
+        return tcpMan.hasSocket(this);
     }
 
     public boolean isConnectionPending() {
@@ -75,6 +102,21 @@ public class TCPSock {
         return (state == State.SHUTDOWN);
     }
 
+    public int getForeignAddress(){
+        return foreignAddress;
+    }
+
+    public int getForeignPort(){
+        return foreignPort;
+    }
+
+    public int getLocalAddress(){
+        return localAddress;
+    }
+
+    public int getLocalPort(){
+        return localPort;
+    }
     /**
      * Initiate connection to a remote socket
      *
