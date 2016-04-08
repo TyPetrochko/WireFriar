@@ -13,3 +13,6 @@ all: $(JAVA_FILES)
 clean:
 	rm -f $(JAVA_FILES:.java=.class)
 	rm -f *~ lib/*~ proj/*~
+
+test:
+	perl fishnet.pl simulate 2 scripts/transfertest.fish

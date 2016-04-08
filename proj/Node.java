@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
  * <pre>
  * Node -- Class defining the data structures and code for the
  * protocol stack for a node participating in the fishnet
-
+ *
  * This code is under student control; we provide a baseline
  * "hello world" example just to show how it interfaces with the FishNet classes.
  *
