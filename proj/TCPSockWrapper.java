@@ -86,7 +86,7 @@ public class TCPSockWrapper{
         try{
             writeBuff.put(bytes);
         }catch(ReadOnlyBufferException robe){
-            System.err.println("TCPSockWrapper: can't write to read buffer");
+            System.err.println("TCPSockWrapper: can't write to write buffer");
             robe.printStackTrace();
         }
     }

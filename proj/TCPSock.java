@@ -10,6 +10,7 @@
  * @author Hao Wang
  * @version 1.0
  */
+import java.nio.*;
 
 public class TCPSock {
     private TCPManager tcpMan;
@@ -171,7 +172,33 @@ public class TCPSock {
      */
     public int write(byte[] buf, int pos, int len) {
         Debug.log(node, "TCPSock: Received request to write " + len + " bytes");
-        return -1;
+
+        int writeBuffSize = wrapper.getReadBuffSize();
+        int originBuffSize = buf.length - pos;
+        int numBytesToWrite = 0;
+
+        // Determine which of the three limits the num. of bytes to read
+        if (writeBuffSize <= originBuffSize && writeBuffSize <= len) {
+            numBytesToWrite = writeBuffSize;    
+        }else if(originBuffSize <= writeBuffSize && originBuffSize <= len){
+            numBytesToWrite = originBuffSize;
+        }else if(len <= writeBuffSize && len <= originBuffSize){
+            numBytesToWrite = len;
+        }
+
+        byte [] bytesToWrite = new byte[numBytesToWrite];
+        System.arraycopy(buf, pos, bytesToWrite, 0, numBytesToWrite);
+
+        try{
+            wrapper.writeToWriteBuff(bytesToWrite);
+            wrapper.flushWriteBuffer();
+            return numBytesToWrite;
+        }catch(BufferOverflowException boe){
+            System.err.println("TCPSock: Somehow received buffer overflow exception");
+            boe.printStackTrace();
+            return -1;
+        }
+
     }
 
     /**
@@ -185,6 +212,8 @@ public class TCPSock {
      *             than len; on failure, -1
      */
     public int read(byte[] buf, int pos, int len) {
+        Debug.log(node, "TCPSock: Received request to read " + len + " bytes");
+
         int readBuffSize = wrapper.getReadBuffSize();
         int destBuffSize = buf.length - pos;
         int numBytesToRead = 0;
