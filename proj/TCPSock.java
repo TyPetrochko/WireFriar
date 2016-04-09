@@ -13,23 +13,15 @@
 
 public class TCPSock {
     private TCPManager tcpMan;
+    private TCPSockWrapper wrapper;
     private int foreignAddress;
     private int foreignPort;
     private int localAddress;
     private int localPort;
-    // TCP socket states
-    enum State {
-        // protocol states
-        CLOSED,
-        LISTEN,
-        SYN_SENT,
-        ESTABLISHED,
-        SHUTDOWN // close requested, FIN not sent (due to unsent data in queue)
-    }
-    private State state;
 
-    public TCPSock(TCPManager tcpMan) {
+    public TCPSock(TCPManager tcpMan, TCPSockWrapper wrapper) {
         this.tcpMan = tcpMan;
+        this.wrapper = wrapper;
         this.foreignAddress = -1;
         this.foreignPort = -1;
         this.localAddress = -1;
@@ -48,7 +40,7 @@ public class TCPSock {
      * @return int 0 on success, -1 otherwise
      */
     public int bind(int localPort) {
-        if(tcpMan.bind(this, localPort) == 0){
+        if(tcpMan.bind(this.wrapper, localPort) == 0){
             localAddress = tcpMan.getAddress();
             this.localPort = localPort;
             return 0;
@@ -67,7 +59,7 @@ public class TCPSock {
             Debug.log("TCPSock: Could not listen (not bound)");
             return -1;
         }else{
-            this.state = State.LISTEN;
+            this.wrapper.setListening();
             Debug.log("TCPSock: Socket now listening on port " + localPort);
             return 0;
         }
@@ -83,23 +75,27 @@ public class TCPSock {
     }
 
     public boolean isBound(){
-        return tcpMan.hasSocket(this);
+        return tcpMan.hasSocketWrapper(this.wrapper);
+    }
+
+    public boolean isListening(){
+        return (wrapper.getState() == TCPSockWrapper.State.LISTEN);
     }
 
     public boolean isConnectionPending() {
-        return (state == State.SYN_SENT);
+        return (wrapper.getState() == TCPSockWrapper.State.SYN_SENT);
     }
 
     public boolean isClosed() {
-        return (state == State.CLOSED);
+        return (wrapper.getState() == TCPSockWrapper.State.CLOSED);
     }
 
     public boolean isConnected() {
-        return (state == State.ESTABLISHED);
+        return (wrapper.getState() == TCPSockWrapper.State.ESTABLISHED);
     }
 
     public boolean isClosurePending() {
-        return (state == State.SHUTDOWN);
+        return (wrapper.getState() == TCPSockWrapper.State.SHUTDOWN);
     }
 
     public int getForeignAddress(){
@@ -125,7 +121,17 @@ public class TCPSock {
      * @return int 0 on success, -1 otherwise
      */
     public int connect(int destAddr, int destPort) {
-        return -1;
+        foreignAddress = destAddr;
+        foreignPort = destPort;
+
+        RequestTuple oldKey = new RequestTuple(-1, -1, localAddress, localPort);
+        RequestTuple newKey = new RequestTuple(destAddr, destPort, localAddress, localPort);
+
+        if(tcpMan.updateSocketEntry(oldKey, newKey) == -1){
+            return -1;
+        }else{
+            return wrapper.setupConnection(destAddr, destPort);
+        }
     }
 
     /**
@@ -165,7 +171,23 @@ public class TCPSock {
      *             than len; on failure, -1
      */
     public int read(byte[] buf, int pos, int len) {
-        return -1;
+        int readBuffSize = wrapper.getReadBuffSize();
+        int destBuffSize = buf.length - pos;
+        int numBytesToRead = 0;
+
+        // Determine which of the three limits the num. of bytes to read
+        if (readBuffSize <= destBuffSize && readBuffSize <= len) {
+            numBytesToRead = readBuffSize;    
+        }else if(destBuffSize <= readBuffSize && destBuffSize <= len){
+            numBytesToRead = destBuffSize;
+        }else if(len <= readBuffSize && len <= destBuffSize){
+            numBytesToRead = len;
+        }
+
+        // copy the read bytes to the provided buffer (not efficient)
+        byte [] bytesRead = wrapper.readFromReadBuff(numBytesToRead);
+        System.arraycopy(bytesRead, 0, buf, pos, numBytesToRead);
+        return bytesRead.length;
     }
 
     /*

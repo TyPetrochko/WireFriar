@@ -8,7 +8,7 @@ public class Edge {
     private int a;
     private int b;
     private boolean live;
-    private long[] nextPktSendTime;  // When can the next packet be put onto the wire (in microseconds)
+    private long[] nextPktSendTime; // When can the next packet be put onto the wire (in microseconds)
     private EdgeOptions options;
 
     /**

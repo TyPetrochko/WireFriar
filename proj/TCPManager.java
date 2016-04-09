@@ -11,12 +11,16 @@
  * @version 1.0
  */
 import java.util.*;
+import java.nio.*;
 
 public class TCPManager {
     private Node node;
     private int addr;
     private Manager manager;
-    private Map<RequestTuple, TCPSock> sockets;
+    private Map<RequestTuple, TCPSockWrapper> sockets;
+
+    public static int DEFAULT_READ_BUFF_SIZE = 87380;
+    public static int DEFAULT_WRITE_BUFF_SIZE = 16384;
 
     private static final byte dummy[] = new byte[0];
 
@@ -24,7 +28,7 @@ public class TCPManager {
         this.node = node;
         this.addr = addr;
         this.manager = manager;
-        this.sockets = new HashMap<RequestTuple, TCPSock>();
+        this.sockets = new HashMap<RequestTuple, TCPSockWrapper>();
     }
 
     /**
@@ -38,16 +42,36 @@ public class TCPManager {
         return this.addr;
     }
 
+    public Manager getManager(){
+        return this.manager;
+    }
+
     public void receivePacket(int from, Packet packet){
         Debug.log("TCPManager: Received a packet from " + from);
 
-        Transport transport = Transport.unpack(packet);
-        RequestTuple match = new RequestTuple(from, transport.srcPort, packet.dest, transport.destPort);
+        /*
+         * TODO:
+         *      -> Phase 1: assume zero network lossage
+         *      -> Phase 2: stop-and-wait per single packet
+         *      -> Phase 3: go-back-n transmission
+         */
 
-        if (sockets.containsKey(match)) {
-            // Todo continue here!
+        Transport transport = Transport.unpack(packet.getPayload());
+        RequestTuple key = new RequestTuple(from, transport.getSrcPort(), packet.getDest(), transport.getDestPort());
+        RequestTuple wildCardKey = new RequestTuple(-1, -1, packet.getDest(), transport.getDestPort());
+
+        TCPSockWrapper match = null;
+        if (sockets.containsKey(key)) {
+            match = (TCPSockWrapper) sockets.get(key);
+        }else if(sockets.containsKey(wildCardKey)){
+            match.handleTransport(transport);
         }
 
+        if(match != null){
+            Debug.log("TCPManager: Received a packet from " + from 
+                + " to " + key.localAddress + ":" + key.localPort);
+            match.handleTransport(transport);
+        }
     }
 
     /*
@@ -61,30 +85,47 @@ public class TCPManager {
      *                 a local port
      */
     public TCPSock socket() {
-        return new TCPSock(this);
+        return new TCPSockWrapper(this, node, DEFAULT_READ_BUFF_SIZE, DEFAULT_WRITE_BUFF_SIZE).getTCPSock();
     }
     /**
      * Bind a socket
      *
-     * @param The socket to bind, and local port to bind to
+     * @param sockWrapper The socket to bind
+     * @param port local port to bind to
      * @return int 0 on success, -1 otherwise
      */
-    public int bind(TCPSock sock, int port){
+    public int bind(TCPSockWrapper sockWrapper, int port){
         RequestTuple rt = new RequestTuple(-1, -1, addr, port);
         
         if(sockets.containsKey(rt)){
             Debug.log("TCPManager: could not bind a socket to port " 
                 + port + " (another socket already bound to port)");
             return -1;
-        }else if (sockets.containsValue(sock)){
+        }else if (sockets.containsValue(sockWrapper)){
             Debug.log("TCPManager: could not bind a socket to port " 
-                + port + " (this socket already bound to port" + sock.getLocalPort() + ")");
+                + port + " (this socket already bound to port" + sockWrapper.getTCPSock().getLocalPort() + ")");
             return -1;
         }else{
-            sockets.put(rt, sock);
+            sockets.put(rt, sockWrapper);
             Debug.log("TCPManager: bound a socket to port " + port);
             return 0;
         }
+    }
+
+    /**
+     * Update a socket entry to a new key.
+     * @param oldKey The key of the old entry
+     * @param newKey The key of the new entry
+     * @return int 0 on success, otherwise -1
+     */
+    public int updateSocketEntry(RequestTuple oldKey, RequestTuple newKey){
+        if(!sockets.containsKey(oldKey)){
+            return -1;
+        }
+
+        TCPSockWrapper entry = (TCPSockWrapper) sockets.remove(oldKey);
+        sockets.put(newKey, entry);
+        return 0;
     }
     
     /**
@@ -93,55 +134,11 @@ public class TCPManager {
      * @param The socket to check
      * @return true if bound, else false
      */
-    public boolean hasSocket(TCPSock sock){
-        return sockets.containsValue(sock);
+    public boolean hasSocketWrapper(TCPSockWrapper wrapper){
+        return sockets.containsValue(wrapper);
     }
 
     /*
      * End Socket API
      */
-}
-
-/**
- * A generic hash key for storing request tuples.
- *
- * To implement wildcards, set the foreign port and
- * address equal to -1
- */ 
-class RequestTuple {
-    public final int foreignAddress;
-    public final int foreignPort;
-    public final int localAddress;
-    public final int localPort;
-
-    public RequestTuple(int foreignAddress, int foreignPort, int localAddress, int localPort){
-        this.foreignAddress = foreignAddress;
-        this.foreignPort = foreignPort;
-        this.localAddress = localAddress;
-        this.localPort = localPort;
-    }
-
-    @Override
-    public boolean equals(Object o){
-        if (this == o)
-            return true;
-
-        if (!(o instanceof RequestTuple))
-            return false;
-
-        RequestTuple rt = (RequestTuple) o;
-        
-        boolean match = rt.foreignAddress == this.foreignAddress
-            && rt.foreignPort == this.foreignPort
-            && rt.localAddress == this.localAddress
-            && rt.localPort == this.localPort;
-
-        return match;
-    }
-
-    @Override
-    public int hashCode(){
-        int base = (localAddress + 2) * (localAddress + 2) * (foreignAddress + 2) * (foreignPort + 2);
-        return base << 5 + base; // mult. by 33 quickly
-    }
 }
