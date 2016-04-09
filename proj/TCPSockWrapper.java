@@ -28,9 +28,12 @@ public class TCPSockWrapper{
         SHUTDOWN // close requested, FIN not sent (due to unsent data in queue)
     }
     private State state;
-    private int seq;
+    private int startSeq;
     private Queue<RequestTuple> pendingConnections;
     private int requestsBacklog;
+
+    private AsyncSendHelper sendHelper;
+    private AsyncReceiveHelper receiveHelper;
 
     /**
      * Create a new TCPSockWrapper as the client,
@@ -45,7 +48,7 @@ public class TCPSockWrapper{
         this.readBuff = ByteBuffer.allocate(readBuffSize);
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.CLOSED;
-        this.seq = 1;
+        this.startSeq = 1;
         this.requestsBacklog = -1;
     }
 
@@ -61,10 +64,10 @@ public class TCPSockWrapper{
         this.readBuff = ByteBuffer.allocate(readBuffSize);
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.ESTABLISHED;
-        this.seq = 1;
+        this.startSeq = 1;
         this.requestsBacklog = -1;
 
-
+        this.receiveHelper = new AsyncReceiveHelper(this, node, tcpMan, startSeq);
     }
 
     /**
@@ -108,36 +111,77 @@ public class TCPSockWrapper{
     }
 
     /**
+     * Send contents of write buffer
+     * down wire.
+     * 
+     * @return int -1 on failure, 0
+     *          otherwise.
+     */
+    public int flushWriteBuff(){
+        if(sendHelper == null){
+            return -1;
+        }else if(sendHelper.isFlushing()){
+            return 0;
+        }else{
+            sendHelper.flush();
+            return 0;
+        }
+    }
+
+    /**
      * Handle an incoming Transport on this connection
      * 
      * @param transport The incoming Transport
      * @param from The incoming address
      */
     public void handleTransport(Transport transport, int from){
-        if(sock.isClosed()){
-            Debug.log(node, "TCPSockWrapper: Received transport but connection closed");
-            // Ignore it
-        }else if(sock.isListening()){
-            // TODO Add a new connection to queue
-            processIncomingRequest(transport, from);
-            Debug.log(node, "TCPSockWrapper: Received transport while listening");
-        }else if(sock.isConnectionPending()){
-            Debug.log(node, "TCPSockWrapper: Received transport while waiting for connection ack.");
-            checkConnectionAcknowledgement(transport);
-        }else if(sock.isConnected()){
-            if(transport.getType() == Transport.DATA){
-                Debug.log(node, "TCPSockWrapper: Received data packet");
-                // Process data
-            }else if(transport.getType() == Transport.SYN){
-                // Didn't receive original
-                Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
-                sendConnectionAcknowledgement(from, transport.getSrcPort(), 
-                    node.getAddr(), transport.getDestPort());
-            }
-        }else if(sock.isClosurePending()){
-            Debug.log(node, "TCPSockWrapper: Received transport while trying to close");
-            // TODO Figure out what this does/should do
+        String stateString = "";
+        switch (this.state) {
+            case CLOSED:
+                stateString = "CLOSED";
+                break;
+            case LISTEN:
+                stateString = "LISTEN";
+                processIncomingRequest(transport, from);
+                break;
+            case SYN_SENT:
+                stateString = "SYN_SENT";
+                checkConnectionAcknowledgement(transport);
+                break;
+            case ESTABLISHED:
+                stateString = "ESTABLISHED";
+                processDataExchangeOrRetransmission(transport, from);
+                break;
+            case SHUTDOWN:
+                stateString = "SHUTDOWN";
+                break;
         }
+
+        Debug.log(node, "TCPSockWrapper: Received transport while in state " + stateString);
+        // if(sock.isClosed()){
+        //     Debug.log(node, "TCPSockWrapper: Received transport but connection closed");
+        //     // Ignore it
+        // }else if(sock.isListening()){
+        //     // TODO Add a new connection to queue
+        //     processIncomingRequest(transport, from);
+        //     Debug.log(node, "TCPSockWrapper: Received transport while listening");
+        // }else if(sock.isConnectionPending()){
+        //     Debug.log(node, "TCPSockWrapper: Received transport while waiting for connection ack.");
+        //     checkConnectionAcknowledgement(transport);
+        // }else if(sock.isConnected()){
+        //     if(transport.getType() == Transport.DATA){
+        //         Debug.log(node, "TCPSockWrapper: Received data packet");
+        //         // Process data
+        //     }else if(transport.getType() == Transport.SYN){
+        //         // Didn't receive original
+        //         Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
+        //         sendConnectionAcknowledgement(from, transport.getSrcPort(), 
+        //             node.getAddr(), transport.getDestPort());
+        //     }
+        // }else if(sock.isClosurePending()){
+        //     Debug.log(node, "TCPSockWrapper: Received transport while trying to close");
+        //     // TODO Figure out what this does/should do
+        // }
     }
 
     /**
@@ -162,7 +206,7 @@ public class TCPSockWrapper{
         try{
             // Create a packet to initiate the connection
             Transport t = new Transport(sock.getLocalPort(), 
-                destPort, Transport.SYN, -1, seq, new byte[0]); // use window size -1
+                destPort, Transport.SYN, -1, startSeq, new byte[0]); // use window size -1
 
             // Send the packet
             node.sendSegment(sock.getLocalAddress(), destAddr, 
@@ -213,12 +257,37 @@ public class TCPSockWrapper{
         return newConnectionWrapper.getTCPSock();
     }
 
+    /**
+     * Return how many bytes are in
+     * read buffer.
+     */
     public int getReadBuffSize(){
         return readBuff.position();
     }
 
+    /**
+     * Return how many bytes are in
+     * read buffer. NOT how many
+     * can be safely written.
+     */
     public int getWriteBuffSize(){
         return writeBuff.position();
+    }
+
+    /**
+     * Return how many bytes
+     * can be written to read buff.
+     */
+    public int getReadBuffSpaceRemaining(){
+        return readBuff.limit() - readBuff.position();
+    }
+
+    /**
+     * Return how many bytes
+     * can be written to write buff.
+     */
+    public int getWriteBuffSpaceRemaining(){
+        return writeBuff.limit() - writeBuff.position();
     }
 
     public TCPSock getTCPSock(){
@@ -303,13 +372,14 @@ public class TCPSockWrapper{
         }else if(transport.getType() != Transport.ACK){
             Debug.log(node, "TCPSockWrapper: Received a non-acknowledgement while connection pending");
             return;
-        }else if(transport.getSeqNum() != seq){
+        }else if(transport.getSeqNum() != startSeq){
             Debug.log(node, "TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
             return;
         }
 
         Debug.log(node, "TCPSockWrapper: Received acknowledgement... connected!");
 
+        this.sendHelper = new AsyncSendHelper(this, node, tcpMan, startSeq);
         this.state = State.ESTABLISHED;
     }
 
@@ -362,7 +432,7 @@ public class TCPSockWrapper{
         try{
             // Create an acknowledgement packet
             Transport t = new Transport(localPort, foreignPort, 
-                Transport.ACK, -1, seq, new byte[0]); // use window size -1
+                Transport.ACK, -1, startSeq, new byte[0]); // use window size -1
 
             // Send the packet
             node.sendSegment(localAddress, foreignAddress, 
@@ -373,5 +443,40 @@ public class TCPSockWrapper{
             iae.printStackTrace();
         }
 
+    }
+
+    /**
+     * Handle an incoming data packet while 
+     * a connection is established
+     * 
+     * This can either be called either
+     * on client or server side.
+     */
+    private void processDataExchangeOrRetransmission(Transport transport, int from){
+
+        switch (transport.getType()) {
+            case Transport.DATA:
+                Debug.log(node, "TCPSockWrapper: Server received data!");
+                break;
+            case Transport.SYN:
+                Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
+                sendConnectionAcknowledgement(from, transport.getSrcPort(), 
+                    node.getAddr(), transport.getDestPort());
+                break;
+            case Transport.ACK:
+                if(sendHelper != null){
+                    sendHelper.checkAck(transport);
+                }
+                break;
+        }
+
+        // if(transport.getType() == Transport.DATA){
+        //     // Process data
+        // }else if(transport.getType() == Transport.SYN){
+        //     // Didn't receive original
+        //     Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
+        //     sendConnectionAcknowledgement(from, transport.getSrcPort(), 
+        //         node.getAddr(), transport.getDestPort());
+        // }else if (Transport.get)
     }
 }

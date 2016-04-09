@@ -173,9 +173,13 @@ public class TCPSock {
     public int write(byte[] buf, int pos, int len) {
         Debug.log(node, "TCPSock: Received request to write " + len + " bytes");
 
-        int writeBuffSize = wrapper.getReadBuffSize();
+
+        int writeBuffSize = wrapper.getWriteBuffSpaceRemaining();
         int originBuffSize = buf.length - pos;
         int numBytesToWrite = 0;
+
+        Debug.log(node, "\tBuff space: " + originBuffSize);
+        Debug.log(node, "\tWrite buff size: " + writeBuffSize);
 
         // Determine which of the three limits the num. of bytes to read
         if (writeBuffSize <= originBuffSize && writeBuffSize <= len) {
@@ -191,7 +195,8 @@ public class TCPSock {
 
         try{
             wrapper.writeToWriteBuff(bytesToWrite);
-            wrapper.flushWriteBuffer();
+            wrapper.flushWriteBuff();
+            Debug.log(node, "TCPSock: Wrote " + numBytesToWrite + " bytes");
             return numBytesToWrite;
         }catch(BufferOverflowException boe){
             System.err.println("TCPSock: Somehow received buffer overflow exception");
@@ -230,6 +235,7 @@ public class TCPSock {
         // copy the read bytes to the provided buffer (not efficient)
         byte [] bytesRead = wrapper.readFromReadBuff(numBytesToRead);
         System.arraycopy(bytesRead, 0, buf, pos, numBytesToRead);
+        Debug.log(node, "TCPSock: Read " + bytesRead.length + " bytes");
         return bytesRead.length;
     }
 
