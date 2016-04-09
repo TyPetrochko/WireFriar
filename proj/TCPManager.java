@@ -42,13 +42,15 @@ public class TCPManager {
         return this.addr;
     }
 
+    public Node getNode(){
+        return this.node;
+    }
+
     public Manager getManager(){
         return this.manager;
     }
 
     public void receivePacket(int from, Packet packet){
-        Debug.log("TCPManager: Received a packet from " + from);
-
         /*
          * TODO:
          *      -> Phase 1: assume zero network lossage
@@ -64,13 +66,13 @@ public class TCPManager {
         if (sockets.containsKey(key)) {
             match = (TCPSockWrapper) sockets.get(key);
         }else if(sockets.containsKey(wildCardKey)){
-            match.handleTransport(transport);
+            match = (TCPSockWrapper) sockets.get(wildCardKey);
         }
 
         if(match != null){
-            Debug.log("TCPManager: Received a packet from " + from 
+            Debug.log(node, "TCPManager: Received a packet from " + from 
                 + " to " + key.localAddress + ":" + key.localPort);
-            match.handleTransport(transport);
+            match.handleTransport(transport, from);
         }
     }
 
@@ -87,6 +89,7 @@ public class TCPManager {
     public TCPSock socket() {
         return new TCPSockWrapper(this, node, DEFAULT_READ_BUFF_SIZE, DEFAULT_WRITE_BUFF_SIZE).getTCPSock();
     }
+    
     /**
      * Bind a socket
      *
@@ -95,19 +98,32 @@ public class TCPManager {
      * @return int 0 on success, -1 otherwise
      */
     public int bind(TCPSockWrapper sockWrapper, int port){
-        RequestTuple rt = new RequestTuple(-1, -1, addr, port);
+        return bind(sockWrapper, port, -1, -1);
+    }
+
+    /**
+     * Bind a socket
+     *
+     * @param sockWrapper The socket to bind
+     * @param localPort Local port to bind to
+     * @param foreignAddress Foreign address to bind to
+     * @param foreignPort Foreign port to bind to
+     * @return int 0 on success, -1 otherwise
+     */
+    public int bind(TCPSockWrapper sockWrapper, int localPort, int foreignAddress, int foreignPort){
+        RequestTuple rt = new RequestTuple(foreignAddress, foreignPort, addr, localPort);
         
         if(sockets.containsKey(rt)){
-            Debug.log("TCPManager: could not bind a socket to port " 
-                + port + " (another socket already bound to port)");
+            Debug.log(node, "TCPManager: could not bind a socket to port " 
+                + localPort + " (another socket already bound to port)");
             return -1;
         }else if (sockets.containsValue(sockWrapper)){
-            Debug.log("TCPManager: could not bind a socket to port " 
-                + port + " (this socket already bound to port" + sockWrapper.getTCPSock().getLocalPort() + ")");
+            Debug.log(node, "TCPManager: could not bind a socket to port " 
+                + localPort + " (this socket already bound to port" + sockWrapper.getTCPSock().getLocalPort() + ")");
             return -1;
         }else{
             sockets.put(rt, sockWrapper);
-            Debug.log("TCPManager: bound a socket to port " + port);
+            Debug.log(node, "TCPManager: bound a socket to port " + localPort);
             return 0;
         }
     }

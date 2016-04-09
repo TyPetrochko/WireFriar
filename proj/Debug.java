@@ -5,7 +5,13 @@ public final class Debug {
 
 	public static void log(String msg){
 		if(DEBUG){
-			System.out.println(msg);
+			System.out.println("\t" + msg);
+		}
+	}
+
+	public static void log(Node node, String msg){
+		if(DEBUG){
+			System.out.println("\t" + node.getAddr() + ": " + msg);
 		}
 	}
 }

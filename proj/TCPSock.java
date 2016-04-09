@@ -18,6 +18,7 @@ public class TCPSock {
     private int foreignPort;
     private int localAddress;
     private int localPort;
+    private Node node;
 
     public TCPSock(TCPManager tcpMan, TCPSockWrapper wrapper) {
         this.tcpMan = tcpMan;
@@ -26,6 +27,17 @@ public class TCPSock {
         this.foreignPort = -1;
         this.localAddress = -1;
         this.localPort = -1;
+        this.node = tcpMan.getNode();
+    }
+
+    public TCPSock(TCPManager tcpMan, TCPSockWrapper wrapper, int foreignAddress, int foreignPort) {
+        this.tcpMan = tcpMan;
+        this.wrapper = wrapper;
+        this.foreignAddress = foreignAddress;
+        this.foreignPort = foreignPort;
+        this.localAddress = -1;
+        this.localPort = -1;
+        this.node = tcpMan.getNode();
     }
 
     /*
@@ -56,11 +68,11 @@ public class TCPSock {
      */
     public int listen(int backlog) {
         if(!isBound()){
-            Debug.log("TCPSock: Could not listen (not bound)");
+            Debug.log(node, "TCPSock: Could not listen (not bound)");
             return -1;
         }else{
-            this.wrapper.setListening();
-            Debug.log("TCPSock: Socket now listening on port " + localPort);
+            this.wrapper.setListening(backlog);
+            Debug.log(node, "TCPSock: Socket now listening on port " + localPort);
             return 0;
         }
     }
@@ -68,10 +80,11 @@ public class TCPSock {
     /**
      * Accept a connection on a socket
      *
-     * @return TCPSock The first established connection on the request queue
+     * @return TCPSock The first established connection on the request queue,
+     *          or null if none exist
      */
     public TCPSock accept() {
-        return null;
+        return wrapper.acceptConnection();
     }
 
     public boolean isBound(){
@@ -157,6 +170,7 @@ public class TCPSock {
      *             than len; on failure, -1
      */
     public int write(byte[] buf, int pos, int len) {
+        Debug.log(node, "TCPSock: Received request to write " + len + " bytes");
         return -1;
     }
 

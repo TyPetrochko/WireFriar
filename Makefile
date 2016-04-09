@@ -14,5 +14,11 @@ clean:
 	rm -f $(JAVA_FILES:.java=.class)
 	rm -f *~ lib/*~ proj/*~
 
+servertest:
+	perl fishnet.pl simulate 2 scripts/servertest.fish
+
+clienttest:
+	perl fishnet.pl simulate 2 scripts/clienttest.fish
+
 test:
 	perl fishnet.pl simulate 2 scripts/transfertest.fish

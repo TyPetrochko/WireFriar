@@ -8,6 +8,7 @@
  * and compacted after reading.
  */
 import java.nio.*;
+import java.util.*;
 import java.lang.reflect.Method;
 
 public class TCPSockWrapper{
@@ -29,7 +30,14 @@ public class TCPSockWrapper{
     private State state;
     private int seq;
     private Queue<RequestTuple> pendingConnections;
+    private int requestsBacklog;
 
+    /**
+     * Create a new TCPSockWrapper as the client,
+     * without knowing the foreign address and port.
+     *
+     * You can connect later.
+     */
     public TCPSockWrapper(TCPManager tcpMan, Node node, int readBuffSize, int writeBuffSize){
         this.tcpMan = tcpMan;
         this.node = node;
@@ -38,7 +46,25 @@ public class TCPSockWrapper{
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.CLOSED;
         this.seq = 1;
-        this.pendingConnections = new LinkedList<RequestTuple>();
+        this.requestsBacklog = -1;
+    }
+
+    /**
+     * Create a new TCPSockWrapper as the server,
+     * specifying a foreign address and port.
+     */
+    public TCPSockWrapper(TCPManager tcpMan, Node node, int readBuffSize, int writeBuffSize, 
+        int foreignAddress, int foreignPort){
+        this.tcpMan = tcpMan;
+        this.node = node;
+        this.sock = new TCPSock(tcpMan, this, foreignAddress, foreignPort);
+        this.readBuff = ByteBuffer.allocate(readBuffSize);
+        this.writeBuff = ByteBuffer.allocate(writeBuffSize);
+        this.state = State.ESTABLISHED;
+        this.seq = 1;
+        this.requestsBacklog = -1;
+
+
     }
 
     /**
@@ -84,23 +110,32 @@ public class TCPSockWrapper{
     /**
      * Handle an incoming Transport on this connection
      * 
-     * @param The incoming Transport
+     * @param transport The incoming Transport
+     * @param from The incoming address
      */
-    public void handleTransport(Transport transport){
+    public void handleTransport(Transport transport, int from){
         if(sock.isClosed()){
-            Debug.log("TCPSockWrapper: Received transport but connection closed");
+            Debug.log(node, "TCPSockWrapper: Received transport but connection closed");
             // Ignore it
         }else if(sock.isListening()){
             // TODO Add a new connection to queue
-            Debug.log("TCPSockWrapper: Received transport while listening");
+            processIncomingRequest(transport, from);
+            Debug.log(node, "TCPSockWrapper: Received transport while listening");
         }else if(sock.isConnectionPending()){
-            Debug.log("TCPSockWrapper: Received transport while waiting for connection ack.");
+            Debug.log(node, "TCPSockWrapper: Received transport while waiting for connection ack.");
             checkConnectionAcknowledgement(transport);
         }else if(sock.isConnected()){
-            Debug.log("TCPSockWrapper: Received transport while waiting for data");
-            // Process data
+            if(transport.getType() == Transport.DATA){
+                Debug.log(node, "TCPSockWrapper: Received data packet");
+                // Process data
+            }else if(transport.getType() == Transport.SYN){
+                // Didn't receive original
+                Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
+                sendConnectionAcknowledgement(from, transport.getSrcPort(), 
+                    node.getAddr(), transport.getDestPort());
+            }
         }else if(sock.isClosurePending()){
-            Debug.log("TCPSockWrapper: Received transport while trying to close");
+            Debug.log(node, "TCPSockWrapper: Received transport while trying to close");
             // TODO Figure out what this does/should do
         }
     }
@@ -117,12 +152,12 @@ public class TCPSockWrapper{
      * @param destPort destination port to connect to
      * @return int 0 on success, -1 otherwise
      */
-    public int setupConnection(int destAddr, int destPort){
+    public int setupConnection(Integer destAddr, Integer destPort){
         if(!(sock.isClosed() || sock.isConnectionPending())){
             return -1; // may have already connected! (called from scheduled retry)
         }
 
-        Debug.log("TCPSockWrapper: Trying to connect to " + destAddr + ":" + destPort + "...");
+        Debug.log(node, "TCPSockWrapper: Trying to connect to " + destAddr + ":" + destPort + "...");
         
         try{
             // Create a packet to initiate the connection
@@ -146,6 +181,37 @@ public class TCPSockWrapper{
         }
     }
 
+    /**
+     * Accept a new connection, and return
+     * an appropriate socket for it.
+     *
+     * @return A TCPSock from queue, or null 
+     *         if queue empty or an error occurs
+     */
+    public TCPSock acceptConnection(){
+        if(pendingConnections.isEmpty()){
+            return null;
+        }
+
+        RequestTuple nextRequest = (RequestTuple) pendingConnections.remove();
+        
+        TCPSockWrapper newConnectionWrapper = new TCPSockWrapper(this.tcpMan, this.node, 
+            TCPManager.DEFAULT_READ_BUFF_SIZE, 
+            TCPManager.DEFAULT_WRITE_BUFF_SIZE,
+            nextRequest.foreignAddress,
+            nextRequest.foreignPort);
+
+        int success = tcpMan.bind(newConnectionWrapper, nextRequest.localPort,
+            nextRequest.foreignAddress, nextRequest.foreignPort);
+
+        if(success == -1){
+            Debug.log(node, "TCPSockWrapper: Tried to accept connection, but couldn't bind");
+            return null;
+        }
+
+        sendConnectionAcknowledgement(nextRequest);
+        return newConnectionWrapper.getTCPSock();
+    }
 
     public int getReadBuffSize(){
         return readBuff.position();
@@ -163,7 +229,9 @@ public class TCPSockWrapper{
         return this.state;
     }
 
-    public void setListening(){
+    public void setListening(int backlog){
+        this.pendingConnections = new LinkedList<RequestTuple>();
+        this.requestsBacklog = backlog;
         this.state = State.LISTEN;
     }
 
@@ -210,7 +278,7 @@ public class TCPSockWrapper{
     private void setupConnectionRetry(long timeout, int destAddr, int destPort){
         Manager m = tcpMan.getManager();
         try {
-            Method method = Callback.getMethod("setupConnection", this, new String [] {"int", "int"});
+            Method method = Callback.getMethod("setupConnection", this, new String [] {"java.lang.Integer", "java.lang.Integer"});
             Callback cb = new Callback(method, this, new Object [] {
                 (Object) new Integer(destAddr), 
                 (Object) new Integer(destPort)});
@@ -230,18 +298,80 @@ public class TCPSockWrapper{
      */
     private void checkConnectionAcknowledgement(Transport transport){
         if(!sock.isConnectionPending()){
-            Debug.log("TCPSockWrapper: Received acknowledgement, but connection not pending");
+            Debug.log(node, "TCPSockWrapper: Received acknowledgement, but connection not pending");
             return;
         }else if(transport.getType() != Transport.ACK){
-            Debug.log("TCPSockWrapper: Received a non-acknowledgement while connection pending");
+            Debug.log(node, "TCPSockWrapper: Received a non-acknowledgement while connection pending");
             return;
         }else if(transport.getSeqNum() != seq){
-            Debug.log("TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
+            Debug.log(node, "TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
             return;
         }
 
-        Debug.log("TCPSockWrapper: Received acknowledgement... connected!");
+        Debug.log(node, "TCPSockWrapper: Received acknowledgement... connected!");
 
         this.state = State.ESTABLISHED;
+    }
+
+    /**
+     * Add a new connection requeset to our backlog queue.
+     * Returns 0 on success, else -1.
+     *
+     * Call accept() to send the acknowledgement.
+     */
+    private void processIncomingRequest(Transport transport, int from){
+        RequestTuple newlyPendingConnection = new RequestTuple(from, transport.getSrcPort(), 
+            sock.getLocalAddress(), sock.getLocalPort());
+
+        if(pendingConnections.contains(newlyPendingConnection)){
+            return; // duplicate request
+        }else if(pendingConnections.size() < requestsBacklog){
+            pendingConnections.add(newlyPendingConnection);
+            Debug.log(node, "TCPSockWrapper: Added a new request from " + from + " to queue");
+        }else{
+            Debug.log(node, "TCPSockWrapper: Couldn't accept a new request from " + from + " to queue: queue full");
+            if(state == State.ESTABLISHED)
+                Debug.log(node, "\tState: ESTABLISHED");
+            else if(state == State.SYN_SENT)
+                Debug.log(node, "\tState: SYN_SENT");
+            else if(state == State.LISTEN)
+                Debug.log(node, "\tState: LISTEN");
+        }
+    }
+
+    /**
+     * Send an acknowledgement packet to a 
+     * newly accepted connection. Because the
+     * packet might not reach its destination,
+     * multiple may get sent.
+     *
+     * Connection ACK's either come from accept
+     * or from handleTransport(). The latter
+     * case is when we are established, but
+     * receive a SYN packet. This indicates
+     * the original ACK was never received.
+     *
+     * @param req The node to acknowledge (as request four-tuple)
+     */
+    private void sendConnectionAcknowledgement(RequestTuple req){
+        sendConnectionAcknowledgement(req.foreignAddress, req.foreignPort, req.localAddress, req.localPort);
+    }
+
+    private void sendConnectionAcknowledgement(int foreignAddress, int foreignPort, 
+        int localAddress, int localPort){
+        try{
+            // Create an acknowledgement packet
+            Transport t = new Transport(localPort, foreignPort, 
+                Transport.ACK, -1, seq, new byte[0]); // use window size -1
+
+            // Send the packet
+            node.sendSegment(localAddress, foreignAddress, 
+                Protocol.TRANSPORT_PKT, t.pack());
+
+        }catch (IllegalArgumentException iae){
+            System.err.println("TCPSockWrapper: Passed bad args to Transport constructor");
+            iae.printStackTrace();
+        }
+
     }
 }
