@@ -36,7 +36,6 @@ public class RetryCallback extends Callback {
      */
     public static void cancelAll(){
     	for(Integer key : callbacks.keySet()){
-    		RetryCallback toCancel = callbacks.remove(key);
     		toCancel.cancel();
     	}
     }
@@ -60,17 +59,27 @@ public class RetryCallback extends Callback {
     }
 
     /**
-     * Cancel this callback.
+     * Cancel this callback, without
+     * removing it from shared collection.
      */
     public void cancel(){
     	canceled = true;
-    	callbacks.remove(seqNum);
+    }
+
+    /**
+     * Cancel this callback, and remove it 
+     * from shared callback collection.
+     */
+    public void cancelAndRemove(){
+        canceled = true;
+        callbacks.remove(seqNum);
     }
 
     @Override
     public void invoke() throws IllegalAccessException, InvocationTargetException {
     	if(!canceled){
 			super.invoke();
+            callbacks.remove(seqNum);
 		}
     }
 }
