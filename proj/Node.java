@@ -232,6 +232,7 @@ public class Node {
     }
 
     public void logError(String output) {
+        Debug.log(this, "ERROR: " + output);
 	this.log(output, System.err);
     }
 

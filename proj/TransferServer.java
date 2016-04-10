@@ -99,10 +99,12 @@ public class TransferServer extends FishThread {
         public void execute() {
             if (!sock.isClosed()) {
                 //node.logOutput("receiving...");
+
                 int index = pos % buf.length;
 
                 int len = buf.length - index;
                 int count = sock.read(buf, index, len);
+                Debug.log(node, "TransferServer: Reading " + len + " bytes");
 
                 if (count == -1) {
                     // on error, release the socket immediately
@@ -122,11 +124,14 @@ public class TransferServer extends FishThread {
                             // data corrupted
                             node.logError("time = " + manager.now() + " msec");
                             node.logError("data corruption detected");
-                            node.logError("position = " + pos);
+                            node.logError("expected " + (byte) i + ", received " + buf[i]);
+                            node.logError("position = " + pos + " and rel. index " + (i - index));
                             node.logError("releasing connection...");
                             sock.release();
                             this.stop();
                             return;
+                        }else{
+                            Debug.log(node, "VERIFIED " + (byte) i + " at position " + i);
                         }
                     }
                 }

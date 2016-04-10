@@ -31,13 +31,15 @@ public class TCPSock {
         this.node = tcpMan.getNode();
     }
 
-    public TCPSock(TCPManager tcpMan, TCPSockWrapper wrapper, int foreignAddress, int foreignPort) {
+    public TCPSock(TCPManager tcpMan, TCPSockWrapper wrapper, 
+        int foreignAddress, int foreignPort,
+        int localAddress, int localPort) {
         this.tcpMan = tcpMan;
         this.wrapper = wrapper;
         this.foreignAddress = foreignAddress;
         this.foreignPort = foreignPort;
-        this.localAddress = -1;
-        this.localPort = -1;
+        this.localAddress = localAddress;
+        this.localPort = localPort;
         this.node = tcpMan.getNode();
     }
 
@@ -222,6 +224,9 @@ public class TCPSock {
         int readBuffSize = wrapper.getReadBuffSize();
         int destBuffSize = buf.length - pos;
         int numBytesToRead = 0;
+
+        Debug.log(node, "\t(Provided) Dest buff space: " + destBuffSize);
+        Debug.log(node, "\tRead buff size: " + readBuffSize);
 
         // Determine which of the three limits the num. of bytes to read
         if (readBuffSize <= destBuffSize && readBuffSize <= len) {

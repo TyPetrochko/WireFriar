@@ -57,17 +57,18 @@ public class TCPSockWrapper{
      * specifying a foreign address and port.
      */
     public TCPSockWrapper(TCPManager tcpMan, Node node, int readBuffSize, int writeBuffSize, 
-        int foreignAddress, int foreignPort){
+        int foreignAddress, int foreignPort,
+        int localAddress, int localPort){
         this.tcpMan = tcpMan;
         this.node = node;
-        this.sock = new TCPSock(tcpMan, this, foreignAddress, foreignPort);
+        this.sock = new TCPSock(tcpMan, this, 
+            foreignAddress, foreignPort,
+            localAddress, localPort);
         this.readBuff = ByteBuffer.allocate(readBuffSize);
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.ESTABLISHED;
         this.startSeq = 1;
         this.requestsBacklog = -1;
-
-        this.receiveHelper = new AsyncReceiveHelper(this, node, tcpMan, startSeq);
     }
 
     /**
@@ -87,6 +88,8 @@ public class TCPSockWrapper{
      */
     public void writeToWriteBuff(byte [] bytes) throws BufferOverflowException{
         try{
+            Debug.log(node, "TCPSockWrapper: Writing " + bytes.length 
+                + " bytes to write buff");
             writeBuff.put(bytes);
         }catch(ReadOnlyBufferException robe){
             System.err.println("TCPSockWrapper: can't write to write buffer");
@@ -243,7 +246,9 @@ public class TCPSockWrapper{
             TCPManager.DEFAULT_READ_BUFF_SIZE, 
             TCPManager.DEFAULT_WRITE_BUFF_SIZE,
             nextRequest.foreignAddress,
-            nextRequest.foreignPort);
+            nextRequest.foreignPort,
+            sock.getLocalAddress(),
+            sock.getLocalPort());
 
         int success = tcpMan.bind(newConnectionWrapper, nextRequest.localPort,
             nextRequest.foreignAddress, nextRequest.foreignPort);
@@ -252,6 +257,8 @@ public class TCPSockWrapper{
             Debug.log(node, "TCPSockWrapper: Tried to accept connection, but couldn't bind");
             return null;
         }
+
+        newConnectionWrapper.setReceiveHelper();
 
         sendConnectionAcknowledgement(nextRequest);
         return newConnectionWrapper.getTCPSock();
@@ -304,6 +311,10 @@ public class TCPSockWrapper{
         this.state = State.LISTEN;
     }
 
+    public void setReceiveHelper(){
+        this.receiveHelper = new AsyncReceiveHelper(this, node, tcpMan, startSeq);
+    }
+
 
     /*
      * Private Methods
@@ -314,28 +325,40 @@ public class TCPSockWrapper{
      * if necessary.
      */
     private byte [] readFromBuffer(int numBytes, ByteBuffer buff){
+        Debug.log(node, "\t\tTCPSockWrapper: State PRE-read = ");
+        Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + buff.position());
+        Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + buff.limit());
+        Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + buff.capacity());
         buff.flip(); // set the limit to current position, then position to 0
         try{
-            if(numBytes >= buff.position()){ // full read
-                byte [] contents = new byte[buff.position()];
+            if(numBytes >= buff.limit()){ // full read
+                Debug.log(node, "\t\tTCPSockWrapper: Reading whole contents of buffer: " + buff.limit() 
+                    + " (requested " + numBytes + ")");
+                byte [] contents = new byte[buff.limit()];
                 buff.get(contents);
                 buff.clear();
                 return contents;
             }else{ // partial read
+                Debug.log(node, "\t\tTCPSockWrapper: Reading partial contents of buffer: " + numBytes);
                 byte [] contents = new byte[numBytes];
                 buff.get(contents);
                 buff.compact();
 
                 // reverse-flip to put in write mode
-                int lim = buff.limit();
-                buff.limit(readBuff.capacity());
-                buff.position(lim);
+                //int lim = buff.limit();
+                //buff.limit(buff.capacity());
+                //buff.position(lim);
                 return contents;
             }
         }catch(BufferUnderflowException bue){
             System.err.println("TCPSockWrapper: buffer underflowed (shouldn't happen)");
             bue.printStackTrace();
             return null;
+        }finally{
+            Debug.log(node, "\t\tTCPSockWrapper: State POST-read = ");
+            Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + buff.position());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + buff.limit());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + buff.capacity());
         }
     }
     /**
@@ -457,6 +480,11 @@ public class TCPSockWrapper{
         switch (transport.getType()) {
             case Transport.DATA:
                 Debug.log(node, "TCPSockWrapper: Server received data!");
+                if(this.receiveHelper != null){
+                    receiveHelper.processData(transport);
+                }else{
+                    Debug.log("\tTCPSockWrapper: However, no receive helper");
+                }
                 break;
             case Transport.SYN:
                 Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");

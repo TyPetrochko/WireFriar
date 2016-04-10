@@ -123,7 +123,8 @@ public class TCPManager {
             return -1;
         }else{
             sockets.put(rt, sockWrapper);
-            Debug.log(node, "TCPManager: bound a socket to port " + localPort);
+            Debug.log(node, "TCPManager: bound a socket to " + rt.localAddress + ":" + rt.localPort
+                + ", foreign address " + rt.foreignAddress + ":" + rt.foreignPort);
             return 0;
         }
     }

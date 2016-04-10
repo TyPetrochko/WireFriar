@@ -30,9 +30,14 @@ public class AsyncReceiveHelper {
     	this.timeout = retryInterval;
 
     	this.isFlushing = false;
+
+    	Debug.log(node, "AsyncReceiveHelper: Initializing a new receive helper");
+    	Debug.log(node, "\tForeign address " + foreignAddress + ":" + foreignPort);
+    	Debug.log(node, "\tLocal address " + localAddress + ":" + localPort);
     }
 
     public void processData(Transport t){
+    	Debug.log(node, "AsyncReceiveHelper: Processing receipt of data");
     	if(t.getType() != Transport.DATA){
     		return;
     	}else if(t.getSeqNum() <= highestSeqReceived){
@@ -40,12 +45,16 @@ public class AsyncReceiveHelper {
     		return;
     	}else if(t.getSeqNum() == highestSeqReceived + 1){
     		highestSeqReceived++;
+    		Debug.log(node, "AsyncReceiveHelper: Received sequence number " + highestSeqReceived);
+    		Debug.log(node, "\tAsyncReceiveHelper: Sending ACK...");
     	}else{
     		return;
     	}
 
     	try{
     		wrapper.writeToReadBuff(t.getPayload());
+    		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 
+    			+ " bytes in read buffer");
     		sendAck(t.getSeqNum());
     	}catch (BufferOverflowException boe){
     		Debug.log(node, "AsyncReceiveHelper: Read buffer overflowed");
@@ -65,8 +74,11 @@ public class AsyncReceiveHelper {
     			Protocol.TRANSPORT_PKT, t.pack());
 
     	}catch(IllegalArgumentException iae){
-            System.err.println("AsyncSendHelper: Shouldn't be here " 
+            System.err.println("AsyncReceiveHelper: Shouldn't be here" 
             	+ " passed bad args to Transport constructor");
+            System.err.println("ARGS:");
+            System.err.println("\tFROM " + localAddress + ":" + localPort);
+            System.err.println("\tTO " + foreignAddress + ":" + foreignPort);
             iae.printStackTrace();
             return;
         }

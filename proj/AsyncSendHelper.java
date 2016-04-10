@@ -50,6 +50,7 @@ public class AsyncSendHelper{
     	}
 
     	// Received acknowledgement; continue
+    	Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence " + highestSeqSent);
     	highestSeqAcknowledged = highestSeqSent;
     	flush();
     }
@@ -64,6 +65,7 @@ public class AsyncSendHelper{
      */
     public void flush(){
     	if(wrapper.getWriteBuffSize() == 0){
+    		Debug.log(node, "AsyncSendHelper: Done flushing");
     		isFlushing = false;
     		return;
     	}
@@ -76,12 +78,19 @@ public class AsyncSendHelper{
     		numBytesToSend = wrapper.getWriteBuffSize();
     	}
 
+    	Debug.log(node, "AsyncSendHelper: Trying to send " + numBytesToSend + " bytes");
+    	Debug.log(node, "\tAsyncSendHelper: There is " + wrapper.getWriteBuffSize() 
+    		+ " bytes available to send");
+
     	// Read bytes from write buffer
     	byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
+
+    	Debug.log(node, "\tAsyncSendHelper: Recovered payload of size " + payload.length);
 
     	// Try to send bytes
     	tryToSendBytes(payload, highestSeqAcknowledged + 1);
     	highestSeqSent = highestSeqAcknowledged + 1;
+    	Debug.log(node, "AsyncSendHelper: Sending sequence number " + highestSeqSent);
 
     	// Make sure we re-try if don't get acknowledgement
     	setupSendPacketRetry(payload, highestSeqSent);
@@ -142,6 +151,7 @@ public class AsyncSendHelper{
      * @param seqnum int The sequence number of the packet
      */
     private void tryToSendBytes(byte [] payload, int seqNum){
+    	Debug.log(node, "AsyncSendHelper: Sending " + payload.length + " bytes over network");
     	try{
     		// Make a transport to send the data
     		Transport t = new Transport(localPort, foreignPort, 
