@@ -18,12 +18,14 @@ public class RetryCallback extends Callback {
 
 	private boolean canceled;
 	private int seqNum;
+    private byte [] payload;
 
-	public RetryCallback(Method method, Object obj, Object[] params, int seqNum) {
+	public RetryCallback(Method method, Object obj, Object[] params, int seqNum, byte [] payload) {
 		super(method, obj, params);
 		
 		this.canceled = false;
 		this.seqNum = seqNum;
+        this.payload = payload;
 		callbacks.put(seqNum, this);
     }
 
@@ -36,7 +38,7 @@ public class RetryCallback extends Callback {
      */
     public static void cancelAll(){
     	for(Integer key : callbacks.keySet()){
-    		toCancel.cancel();
+    		callbacks.get(key).cancel();
     	}
     }
 
@@ -75,40 +77,14 @@ public class RetryCallback extends Callback {
         callbacks.remove(seqNum);
     }
 
+    public byte [] getPayload(){
+        return payload;
+    }
+
     @Override
     public void invoke() throws IllegalAccessException, InvocationTargetException {
     	if(!canceled){
 			super.invoke();
-            callbacks.remove(seqNum);
 		}
     }
 }
-
-// class CallbackKey {
-// 	public final int seqNum;
-// 	public final byte [] payload;
-// 	public CallbackKey(seqNum, payload){
-// 		this.seqNum = seqNum;
-// 		this.payload = payload;
-// 	}
-
-// 	@Override
-//     public int hashCode(){
-//     	int base = seqNum;
-//         return base << 5 + base; // mult. by 33 quickly
-//     }
-
-//     @Override
-//     public boolean equals(Object o){
-//     	if (this == o)
-//             return true;
-
-//         if (!(o instanceof CallbackKey))
-//             return false;
-
-//         CallbackKey otherKey = (CallbackKey) o;
-
-//         return (otherKey.seqNum == seqNum 
-//         	&& otherKey.payload == payload);
-//     }
-// }

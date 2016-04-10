@@ -2,6 +2,7 @@ import java.lang.reflect.Method;
 
 public class AsyncSendHelper{
 	private final long retryInterval = 100; // how frequently we retry to connect while pending
+    private final int defaultWindow = 12; // how large should default window be
     private final TCPManager tcpMan;
     private final Node node;
     private final TCPSockWrapper wrapper;
@@ -29,6 +30,7 @@ public class AsyncSendHelper{
     	this.tcpMan = tcpMan;
     	this.highestSeqAcknowledged = seq;
     	this.highestSeqSent = seq;
+        this.cwnd = defaultWindow;
     	this.timeout = retryInterval;
 
     	this.isFlushing = false;
@@ -45,13 +47,19 @@ public class AsyncSendHelper{
     public void checkAck(Transport transport){
     	if(transport.getType() != Transport.ACK){
     		return;
-    	}else if(transport.getSeqNum() != highestSeqSent){
+    	}else if(transport.getSeqNum() != highestSeqAcknowledged + 1){
     		return;
     	}
 
+        // Cancel this packet's callback
+        RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
+        if(toCancel != null){
+            toCancel.cancelAndRemove();
+        }
+
     	// Received acknowledgement; continue
     	Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence number " + highestSeqSent);
-    	highestSeqAcknowledged = highestSeqSent;
+    	highestSeqAcknowledged++;
     	flush();
     }
 
@@ -65,37 +73,61 @@ public class AsyncSendHelper{
      */
     public void flush(){
     	if(wrapper.getWriteBuffSize() == 0){
-    		Debug.log(node, "AsyncSendHelper: Done flushing");
+    		Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
     		isFlushing = false;
     		return;
     	}else{
             isFlushing = true;
         }
 
-    	// Determine num bytes to send
-    	int numBytesToSend = 0;
-    	if(wrapper.getWriteBuffSize() > Transport.MAX_PAYLOAD_SIZE){
-    		numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
-    	}else{
-    		numBytesToSend = wrapper.getWriteBuffSize();
-    	}
+        /* Send full window */
+        for (int i = highestSeqSent + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
+            if(wrapper.getWriteBuffSize() == 0){
+                Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
+                isFlushing = false;
+                return;
+            }
 
-    	Debug.log(node, "AsyncSendHelper: Trying to send " + numBytesToSend + " bytes");
-    	Debug.log(node, "\tAsyncSendHelper: There is " + wrapper.getWriteBuffSize() 
-    		+ " bytes available to send");
+            // Determine num bytes to send
+            int numBytesToSend = 0;
+            if(wrapper.getWriteBuffSize() > Transport.MAX_PAYLOAD_SIZE){
+                numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
+            }else{
+                numBytesToSend = wrapper.getWriteBuffSize();
+            }
 
-    	// Read bytes from write buffer
-    	byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
+            byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
 
-    	Debug.log(node, "\tAsyncSendHelper: Recovered payload of size " + payload.length);
+            tryToSendBytes(payload, i);
+            highestSeqSent++;
 
-    	// Try to send bytes
-    	tryToSendBytes(payload, highestSeqAcknowledged + 1);
-    	highestSeqSent = highestSeqAcknowledged + 1;
-    	Debug.log(node, "AsyncSendHelper: Sending sequence number " + highestSeqSent);
+            setupSendPacketRetry(payload, i);
+        }
 
-    	// Make sure we re-try if don't get acknowledgement
-    	setupSendPacketRetry(payload, highestSeqSent);
+    	// // Determine num bytes to send
+    	// int numBytesToSend = 0;
+    	// if(wrapper.getWriteBuffSize() > Transport.MAX_PAYLOAD_SIZE){
+    	// 	numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
+    	// }else{
+    	// 	numBytesToSend = wrapper.getWriteBuffSize();
+    	// }
+
+    	// Debug.log(node, "AsyncSendHelper: Trying to send " + numBytesToSend + " bytes");
+    	// Debug.log(node, "\tAsyncSendHelper: There is " + wrapper.getWriteBuffSize() 
+    	// 	+ " bytes available to send");
+
+    	// // Read bytes from write buffer
+    	// byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
+
+    	// Debug.log(node, "\tAsyncSendHelper: Recovered payload of size " + payload.length);
+
+    	// // Try to send bytes
+    	// tryToSendBytes(payload, highestSeqAcknowledged + 1);
+    	// highestSeqSent = highestSeqAcknowledged + 1;
+    	// Debug.log(node, "AsyncSendHelper: Sending sequence number " + highestSeqSent);
+
+    	// // Make sure we re-try if don't get acknowledgement
+    	// setupSendPacketRetry(payload, highestSeqSent);
     }
 
     /**
@@ -106,17 +138,21 @@ public class AsyncSendHelper{
      * @param seqToAcknowledge int The sequence number to acknowledge
      */
     public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge){
-    	Manager m = tcpMan.getManager();
-        try {
-            Method method = Callback.getMethod("resendIfNotAcknowledged", this, new String [] {"[B", "java.lang.Integer"});
-            Callback cb = new Callback(method, this, new Object [] {
-                (Object) payload, 
-                (Object) new Integer(seqToAcknowledge)});
+        Manager m = tcpMan.getManager();
+
+        try{
+            // Get method to fire on timeout
+            Method method = Callback.getMethod("resendIfNotAcknowledged", 
+                this, new String [] {"[B", "java.lang.Integer"});
+
+            Callback cb = new RetryCallback(method, this, new Object []{
+                (Object) payload,
+                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, payload);
 
             m.addTimer(this.node.getAddr(), timeout, cb);
-        }catch(Exception e) {
-            System.err.println("TCPSockWrapper: Failed to add timer callback. Method Name: resendIfNotAcknowledged" +
-                 "\nException: " + e);
+        }catch(Exception e){
+            System.err.println("AsyncSendHelper: Couldn't send packet");
+            e.printStackTrace();
         }
     }
 
@@ -127,18 +163,23 @@ public class AsyncSendHelper{
      * @param seqToAcknowledge int The sequence number to acknowledge
      */
     public void resendIfNotAcknowledged(byte [] payload, Integer seqToAcknowledge){
-    	if(seqToAcknowledge <= highestSeqAcknowledged){
-    		return; // already acknowledged
-    	}
+        if(seqToAcknowledge <= highestSeqAcknowledged){
+            Debug.log(node, "AsyncSendHelper: Shouldn't be here - callback not canceled");
+            return;
+        }
 
-        Debug.log(node, "AsyncSendHelper: Sequence number " 
-            + seqToAcknowledge + " was never acknowledged, resending now...");
-    	
-    	// Try to send bytes
-    	tryToSendBytes(payload, seqToAcknowledge);
+        // prevent other callbacks from firing
+        RetryCallback.cancelAll();
 
-    	// Make sure we re-try if don't get acknowledgement
-    	setupSendPacketRetry(payload, seqToAcknowledge);
+        // re-send all unacknowledged packets
+        for(int i = highestSeqAcknowledged + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
+            RetryCallback toResend = RetryCallback.getCallback(i);
+
+            byte[] payloadToSend = toResend.getPayload();
+
+            tryToSendBytes(payloadToSend, i);
+            setupSendPacketRetry(payloadToSend, i);
+        }
     }
 
     public boolean isFlushing(){
