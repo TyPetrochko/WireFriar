@@ -1,5 +1,5 @@
-This code is not functioning, but rather a skeleton for how the program will
-eventually work.
+A fully-functional TCP reliable transport protocol implementation using 
+Fishnet to simulate network lossage.
 
 Email tyler.petrochko@yale.edu for questions.
 
