@@ -90,7 +90,17 @@ public class TCPSockWrapper{
         try{
             Debug.log(node, "TCPSockWrapper: Writing " + bytes.length 
                 + " bytes to write buff");
+            Debug.log(node, "\t\tTCPSockWrapper: Write Buff State PRE-write = ");
+            Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + writeBuff.position());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + writeBuff.limit());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + writeBuff.capacity());
+            Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + writeBuff.array()[0]);
             writeBuff.put(bytes);
+            Debug.log(node, "\t\tTCPSockWrapper: Write Buff State POST-write = ");
+            Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + writeBuff.position());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + writeBuff.limit());
+            Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + writeBuff.capacity());
+            Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + writeBuff.array()[0]);
         }catch(ReadOnlyBufferException robe){
             System.err.println("TCPSockWrapper: can't write to write buffer");
             robe.printStackTrace();
@@ -329,6 +339,8 @@ public class TCPSockWrapper{
         Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + buff.position());
         Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + buff.limit());
         Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + buff.capacity());
+        Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + buff.array()[0]);
+
         buff.flip(); // set the limit to current position, then position to 0
         try{
             if(numBytes >= buff.limit()){ // full read
@@ -359,6 +371,7 @@ public class TCPSockWrapper{
             Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + buff.position());
             Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + buff.limit());
             Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + buff.capacity());
+            Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + buff.array()[0]);
         }
     }
     /**

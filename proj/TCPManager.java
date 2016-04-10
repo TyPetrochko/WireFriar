@@ -19,8 +19,8 @@ public class TCPManager {
     private Manager manager;
     private Map<RequestTuple, TCPSockWrapper> sockets;
 
-    public static int DEFAULT_READ_BUFF_SIZE = 87380;
-    public static int DEFAULT_WRITE_BUFF_SIZE = 16384;
+    public static int DEFAULT_READ_BUFF_SIZE = 10000;
+    public static int DEFAULT_WRITE_BUFF_SIZE = 10000;
 
     private static final byte dummy[] = new byte[0];
 

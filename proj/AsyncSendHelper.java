@@ -50,7 +50,7 @@ public class AsyncSendHelper{
     	}
 
     	// Received acknowledgement; continue
-    	Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence " + highestSeqSent);
+    	Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence number " + highestSeqSent);
     	highestSeqAcknowledged = highestSeqSent;
     	flush();
     }
@@ -68,7 +68,9 @@ public class AsyncSendHelper{
     		Debug.log(node, "AsyncSendHelper: Done flushing");
     		isFlushing = false;
     		return;
-    	}
+    	}else{
+            isFlushing = true;
+        }
 
     	// Determine num bytes to send
     	int numBytesToSend = 0;
@@ -128,6 +130,9 @@ public class AsyncSendHelper{
     	if(seqToAcknowledge <= highestSeqAcknowledged){
     		return; // already acknowledged
     	}
+
+        Debug.log(node, "AsyncSendHelper: Sequence number " 
+            + seqToAcknowledge + " was never acknowledged, resending now...");
     	
     	// Try to send bytes
     	tryToSendBytes(payload, seqToAcknowledge);
@@ -151,11 +156,14 @@ public class AsyncSendHelper{
      * @param seqnum int The sequence number of the packet
      */
     private void tryToSendBytes(byte [] payload, int seqNum){
-    	Debug.log(node, "AsyncSendHelper: Sending " + payload.length + " bytes over network");
+    	Debug.log(node, "AsyncSendHelper: Sending " + payload.length 
+            + " bytes over network: sequence number " + seqNum);
     	try{
     		// Make a transport to send the data
     		Transport t = new Transport(localPort, foreignPort, 
     			Transport.DATA, -1, seqNum, payload);
+
+            Debug.verifyPacket(node, t);
 
     		// Send the packet over the wire
     		node.sendSegment(localAddress, foreignAddress, 

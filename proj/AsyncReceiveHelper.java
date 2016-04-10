@@ -51,6 +51,8 @@ public class AsyncReceiveHelper {
     		return;
     	}
 
+        Debug.verifyPacket(node, t);
+
     	try{
     		wrapper.writeToReadBuff(t.getPayload());
     		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 

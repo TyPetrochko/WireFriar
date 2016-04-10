@@ -175,20 +175,19 @@ public class TCPSock {
     public int write(byte[] buf, int pos, int len) {
         Debug.log(node, "TCPSock: Received request to write " + len + " bytes");
 
-
-        int writeBuffSize = wrapper.getWriteBuffSpaceRemaining();
+        int writeBuffSpaceLeft = wrapper.getWriteBuffSpaceRemaining();
         int originBuffSize = buf.length - pos;
         int numBytesToWrite = 0;
 
         Debug.log(node, "\tBuff space: " + originBuffSize);
-        Debug.log(node, "\tWrite buff size: " + writeBuffSize);
+        Debug.log(node, "\tWrite buff space left: " + writeBuffSpaceLeft);
 
         // Determine which of the three limits the num. of bytes to read
-        if (writeBuffSize <= originBuffSize && writeBuffSize <= len) {
-            numBytesToWrite = writeBuffSize;    
-        }else if(originBuffSize <= writeBuffSize && originBuffSize <= len){
+        if (writeBuffSpaceLeft <= originBuffSize && writeBuffSpaceLeft <= len) {
+            numBytesToWrite = writeBuffSpaceLeft;    
+        }else if(originBuffSize <= writeBuffSpaceLeft && originBuffSize <= len){
             numBytesToWrite = originBuffSize;
-        }else if(len <= writeBuffSize && len <= originBuffSize){
+        }else if(len <= writeBuffSpaceLeft && len <= originBuffSize){
             numBytesToWrite = len;
         }
 

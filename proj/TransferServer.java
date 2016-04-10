@@ -119,6 +119,7 @@ public class TransferServer extends FishThread {
 
                 if (count > 0) {
                     //node.logOutput("verifying data...");
+                    Debug.log(node, "TransferServer: Verifying data...");
                     for (int i = index; i < index + count; i++) {
                         if (buf[i] != (byte) i) {
                             // data corrupted
@@ -134,6 +135,7 @@ public class TransferServer extends FishThread {
                             Debug.log(node, "VERIFIED " + (byte) i + " at position " + i);
                         }
                     }
+                    Debug.log(node, "TransferServer: Done verifying data!");
                 }
 
                 pos += count;
