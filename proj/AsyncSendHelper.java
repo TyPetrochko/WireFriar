@@ -64,7 +64,7 @@ public class AsyncSendHelper{
         // Cancel this packet's callback and update RTT estimate/std.dev
         RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
         if(toCancel != null){
-            long rttMeasured = System.currentTimeMillis() - toCancel.getTimeSent();
+            long rttMeasured = tcpMan.getManager().now() - toCancel.getTimeSent();
             adjustRTT(rttMeasured);
             toCancel.cancelAndRemove();
         }
@@ -111,7 +111,7 @@ public class AsyncSendHelper{
             tryToSendBytes(payload, i);
             highestSeqSent++;
 
-            setupSendPacketRetry(payload, i, System.currentTimeMillis());
+            setupSendPacketRetry(payload, i);
         }
     }
 
@@ -122,7 +122,7 @@ public class AsyncSendHelper{
      * @param payload byte[] Bytes to re-send
      * @param seqToAcknowledge int The sequence number to acknowledge
      */
-    public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge, long timeSent){
+    public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge){
         Manager m = tcpMan.getManager();
 
         try{
@@ -132,7 +132,7 @@ public class AsyncSendHelper{
 
             Callback cb = new RetryCallback(method, this, new Object []{
                 (Object) payload,
-                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, timeSent, payload);
+                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, m.now(), payload);
 
             m.addTimer(this.node.getAddr(), timeout, cb);
         }catch(Exception e){
@@ -163,7 +163,7 @@ public class AsyncSendHelper{
                 byte[] payloadToSend = toResend.getPayload();
 
                 tryToSendBytes(payloadToSend, i);
-                setupSendPacketRetry(payloadToSend, i, System.currentTimeMillis());
+                setupSendPacketRetry(payloadToSend, i);
             }
         }
     }
@@ -177,6 +177,15 @@ public class AsyncSendHelper{
      */
     public boolean isFlushing(){
     	return isFlushing;
+    }
+
+    /**
+     * Send a fin signal now, as the write buff
+     * is empty and the TCPSock would like to close.
+     */
+    public void sendFinSignalNow(){
+        sendFinSignal(highestSeqSent);
+        highestSeqSent++;
     }
 
     /* ###############################
@@ -226,8 +235,7 @@ public class AsyncSendHelper{
         isFlushing = false;
 
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqAcknowledged){
-            sendFinSignal(highestSeqSent);
-            highestSeqSent++;
+            sendFinSignalNow();
         }
     }
 
@@ -276,11 +284,11 @@ public class AsyncSendHelper{
         //     + ", est = " + rttEst 
         //     + ", RTTdev = " + rttDev 
         //     + ", timeout = " + timeout);
-        // rttEst = (int)((1.0 - alpha)*rttEst + alpha * rttMeasured);
-        // rttDev = (int)((1.0 - beta)*rttDev + beta*Math.abs(rttEst - rttMeasured));
-        //timeout = rttEst + 4*rttDev;
+        rttEst = (int)((1.0 - alpha)*rttEst + alpha * rttMeasured);
+        rttDev = (int)((1.0 - beta)*rttDev + beta*Math.abs(rttEst - rttMeasured));
+        timeout = rttEst + 4*rttDev;
+        // System.err.println("AsyncSendHelper: Set timeout = " + timeout);
         // System.err.println("AsyncSendHelper: Measured rtt: " + rttMeasured);
-        timeout = 200;
         // System.err.println("AsyncSendHelper: DONE ADJUSTING for RTT = " + rttMeasured 
         //     + ", est = " + rttEst 
         //     + ", RTTdev = " + rttDev 

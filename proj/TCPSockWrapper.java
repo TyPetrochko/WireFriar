@@ -268,6 +268,17 @@ public class TCPSockWrapper{
      */
     public void close(){
         state = State.SHUTDOWN;
+
+        // if sending and nothing to send, close immediately
+        if(sendHelper != null && getWriteBuffSize() == 0){
+            sendHelper.sendFinSignalNow();
+            state = State.CLOSED;
+        }
+
+        // if receiving and nothing to receive, close immediately
+        if(receiveHelper != null && getReadBuffSize() == 0){
+            state = State.CLOSED;
+        }
     }
 
     /**

@@ -140,8 +140,8 @@ public class TransferServer extends FishThread {
 
                 pos += count;
 
-                //node.logOutput("time = " + manager.now() + " msec");
-                //node.logOutput("bytes received = " + count);
+                // node.logOutput("time = " + manager.now() + " msec");
+                // node.logOutput("\tbytes received = " + count);
                 return;
             }
 
