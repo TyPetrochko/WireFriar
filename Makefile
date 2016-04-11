@@ -22,3 +22,9 @@ clienttest:
 
 test:
 	perl fishnet.pl simulate 2 scripts/transfertest.fish
+
+docs:
+	rm -rf javadoc
+	mkdir javadoc
+	javadoc -d javadoc/ -classpath javadoc/ proj/*.java
+

@@ -145,15 +145,9 @@ public class TransferServer extends FishThread {
                 return;
             }
 
-            int index = pos % buf.length;
-
-            int len = buf.length - index;
-            int count = sock.read(buf, index, len);
-            System.err.println("TransferServer: Once closed, read " + len + " bytes");
-
             node.logOutput("time = " + manager.now() + " msec");
             node.logOutput("connection closed");
-            node.logOutput("total bytes received = " + pos);
+            node.logOutput("total bytes successfully received = " + pos);
             this.stop();
         }
     }

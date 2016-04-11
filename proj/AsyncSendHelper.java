@@ -75,7 +75,6 @@ public class AsyncSendHelper{
      */
     public void flush(){
     	if(wrapper.getWriteBuffSize() == 0){
-    		Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
             handleDoneFlushing();
     		return;
     	}else{
@@ -85,7 +84,6 @@ public class AsyncSendHelper{
         /* Send full window */
         for (int i = highestSeqSent + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
             if(wrapper.getWriteBuffSize() == 0){
-                Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
                 handleDoneFlushing();
                 return;
             }
@@ -218,8 +216,6 @@ public class AsyncSendHelper{
         isFlushing = false;
 
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqAcknowledged){
-            System.err.println("AsyncSendHelper: Done flushing, highest seq sent is " 
-                + highestSeqSent + ", highest acknowledged is " + highestSeqAcknowledged);
             sendFinSignal(highestSeqSent);
             highestSeqSent++;
         }

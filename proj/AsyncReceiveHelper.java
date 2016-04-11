@@ -51,6 +51,12 @@ public class AsyncReceiveHelper {
 
         Debug.verifyPacket(node, t);
 
+        // abort if not enough space remaining
+        if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
+            return; // 
+        }
+
+        // send ACK
     	try{
     		wrapper.writeToReadBuff(t.getPayload());
     		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 
@@ -67,7 +73,8 @@ public class AsyncReceiveHelper {
     	try{
     		// Make a transport to send the data
     		Transport t = new Transport(localPort, foreignPort, 
-    			Transport.ACK, -1, seqToAcknowledge, new byte[0]);
+    			Transport.ACK, wrapper.getReadBuffSpaceRemaining(), seqToAcknowledge, 
+                new byte[0]);
 
     		// Send the packet over the wire
     		node.sendSegment(localAddress, foreignAddress, 
@@ -91,8 +98,6 @@ public class AsyncReceiveHelper {
      */
 
     private void processTermination(){
-        System.err.println("AsyncReceiveHelper: Terminating everything. Highest Packet received is " 
-            + highestSeqReceived);
         wrapper.close();
     }
 }

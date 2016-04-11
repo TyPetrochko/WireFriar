@@ -250,7 +250,6 @@ public class TCPSock {
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN){
             if(wrapper.getReadBuffSize() == 0){
                 wrapper.setClosed();
-                System.err.println("Read all remaining bytes - shutting down now!");
             }
         }
 
