@@ -51,12 +51,6 @@ public class TCPManager {
     }
 
     public void receivePacket(int from, Packet packet){
-        /*
-         * TODO:
-         *      -> Phase 1: assume zero network lossage
-         *      -> Phase 2: stop-and-wait per single packet
-         *      -> Phase 3: go-back-n transmission
-         */
 
         Transport transport = Transport.unpack(packet.getPayload());
         RequestTuple key = new RequestTuple(from, transport.getSrcPort(), packet.getDest(), transport.getDestPort());
@@ -153,6 +147,21 @@ public class TCPManager {
      */
     public boolean hasSocketWrapper(TCPSockWrapper wrapper){
         return sockets.containsValue(wrapper);
+    }
+
+    /**
+     * Check if a socket is bound (we have it in our socket Map)
+     *
+     * @param The socket to check
+     * @return true if bound, else false
+     */
+    public boolean removeSocketWrapper(RequestTuple key){
+        if (!sockets.containsKey(key)){
+            return false;
+        }else{
+            sockets.remove(key);
+            return true;
+        }
     }
 
     /*

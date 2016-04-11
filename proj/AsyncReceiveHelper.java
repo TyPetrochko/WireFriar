@@ -37,19 +37,17 @@ public class AsyncReceiveHelper {
     }
 
     public void processData(Transport t){
-    	Debug.log(node, "AsyncReceiveHelper: Processing receipt of data");
-    	if(t.getType() != Transport.DATA){
-    		return;
-    	}else if(t.getSeqNum() <= highestSeqReceived){
+    	if(t.getType() == Transport.FIN){
+            processTermination();
+            return;
+        }else if(t.getSeqNum() <= highestSeqReceived){
     		sendAck(t.getSeqNum()); // didn't get last ACK
     		return;
-    	}else if(t.getSeqNum() == highestSeqReceived + 1){
-    		highestSeqReceived++;
-    		Debug.log(node, "AsyncReceiveHelper: Received sequence number " + highestSeqReceived);
-    		Debug.log(node, "\tAsyncReceiveHelper: Sending ACK...");
-    	}else{
-    		return;
+    	}else if(t.getSeqNum() != highestSeqReceived + 1){
+    		return; // discard it (early)
     	}
+
+        highestSeqReceived++;
 
         Debug.verifyPacket(node, t);
 
@@ -84,5 +82,17 @@ public class AsyncReceiveHelper {
             iae.printStackTrace();
             return;
         }
+    }
+
+
+    /* ###############################
+     * ####### Private Methods #######
+     * ###############################
+     */
+
+    private void processTermination(){
+        System.err.println("AsyncReceiveHelper: Terminating everything. Highest Packet received is " 
+            + highestSeqReceived);
+        wrapper.close();
     }
 }

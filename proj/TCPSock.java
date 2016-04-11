@@ -154,12 +154,14 @@ public class TCPSock {
      * Initiate closure of a connection (graceful shutdown)
      */
     public void close() {
+        wrapper.close();
     }
 
     /**
      * Release a connection immediately (abortive shutdown)
      */
     public void release() {
+        wrapper.setClosed();
     }
 
     /**
@@ -173,6 +175,9 @@ public class TCPSock {
      *             than len; on failure, -1
      */
     public int write(byte[] buf, int pos, int len) {
+        if(wrapper.getState() != TCPSockWrapper.State.ESTABLISHED){
+            return -1;
+        }
         Debug.log(node, "TCPSock: Received request to write " + len + " bytes");
 
         int writeBuffSpaceLeft = wrapper.getWriteBuffSpaceRemaining();
@@ -240,6 +245,15 @@ public class TCPSock {
         byte [] bytesRead = wrapper.readFromReadBuff(numBytesToRead);
         System.arraycopy(bytesRead, 0, buf, pos, numBytesToRead);
         Debug.log(node, "TCPSock: Read " + bytesRead.length + " bytes");
+
+        // if we're shutting down and read all remaining bytes, set CLOSED
+        if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN){
+            if(wrapper.getReadBuffSize() == 0){
+                wrapper.setClosed();
+                System.err.println("Read all remaining bytes - shutting down now!");
+            }
+        }
+
         return bytesRead.length;
     }
 

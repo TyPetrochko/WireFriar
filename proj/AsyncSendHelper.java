@@ -49,7 +49,9 @@ public class AsyncSendHelper{
     		return;
     	}else if(transport.getSeqNum() != highestSeqAcknowledged + 1){
     		return;
-    	}
+    	}else if(wrapper.getState() == TCPSockWrapper.State.CLOSED){
+            return;
+        }
 
         // Cancel this packet's callback
         RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
@@ -74,7 +76,7 @@ public class AsyncSendHelper{
     public void flush(){
     	if(wrapper.getWriteBuffSize() == 0){
     		Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
-    		isFlushing = false;
+            handleDoneFlushing();
     		return;
     	}else{
             isFlushing = true;
@@ -84,7 +86,7 @@ public class AsyncSendHelper{
         for (int i = highestSeqSent + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
             if(wrapper.getWriteBuffSize() == 0){
                 Debug.log(node, "AsyncSendHelper: Done flushing - write buffer empty");
-                isFlushing = false;
+                handleDoneFlushing();
                 return;
             }
 
@@ -103,31 +105,6 @@ public class AsyncSendHelper{
 
             setupSendPacketRetry(payload, i);
         }
-
-    	// // Determine num bytes to send
-    	// int numBytesToSend = 0;
-    	// if(wrapper.getWriteBuffSize() > Transport.MAX_PAYLOAD_SIZE){
-    	// 	numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
-    	// }else{
-    	// 	numBytesToSend = wrapper.getWriteBuffSize();
-    	// }
-
-    	// Debug.log(node, "AsyncSendHelper: Trying to send " + numBytesToSend + " bytes");
-    	// Debug.log(node, "\tAsyncSendHelper: There is " + wrapper.getWriteBuffSize() 
-    	// 	+ " bytes available to send");
-
-    	// // Read bytes from write buffer
-    	// byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
-
-    	// Debug.log(node, "\tAsyncSendHelper: Recovered payload of size " + payload.length);
-
-    	// // Try to send bytes
-    	// tryToSendBytes(payload, highestSeqAcknowledged + 1);
-    	// highestSeqSent = highestSeqAcknowledged + 1;
-    	// Debug.log(node, "AsyncSendHelper: Sending sequence number " + highestSeqSent);
-
-    	// // Make sure we re-try if don't get acknowledgement
-    	// setupSendPacketRetry(payload, highestSeqSent);
     }
 
     /**
@@ -172,47 +149,110 @@ public class AsyncSendHelper{
         RetryCallback.cancelAll();
 
         // re-send all unacknowledged packets
-        for(int i = highestSeqAcknowledged + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
+        for(int i = highestSeqAcknowledged + 1; i < highestSeqSent + 1; i++){
             RetryCallback toResend = RetryCallback.getCallback(i);
+            if(toResend != null){
+                byte[] payloadToSend = toResend.getPayload();
 
-            byte[] payloadToSend = toResend.getPayload();
-
-            tryToSendBytes(payloadToSend, i);
-            setupSendPacketRetry(payloadToSend, i);
+                tryToSendBytes(payloadToSend, i);
+                setupSendPacketRetry(payloadToSend, i);
+            }
         }
     }
 
+    /**
+     * Determine if flushing is currently
+     * in progress.
+     *
+     * @return boolean Whether or not this
+     *      helper is currently flushing.
+     */
     public boolean isFlushing(){
     	return isFlushing;
     }
 
-    /*
-     * Private methods
+    /* ###############################
+     * ####### Private Methods #######
+     * ###############################
      */
 
     /**
      * Try to send some bytes down the wire.
+     * it assumes that the payload is data, so
+     * this cannot be used to terminate/set up
+     * connections.
      *
      * @param payload byte[] the data to send
      * @param seqnum int The sequence number of the packet
      */
     private void tryToSendBytes(byte [] payload, int seqNum){
-    	Debug.log(node, "AsyncSendHelper: Sending " + payload.length 
+        Debug.log(node, "AsyncSendHelper: Sending " + payload.length 
             + " bytes over network: sequence number " + seqNum);
-    	try{
-    		// Make a transport to send the data
-    		Transport t = new Transport(localPort, foreignPort, 
-    			Transport.DATA, -1, seqNum, payload);
+        try{
+            // Make a transport to send the data
+            Transport t = new Transport(localPort, foreignPort, 
+                Transport.DATA, -1, seqNum, payload);
 
             Debug.verifyPacket(node, t);
 
-    		// Send the packet over the wire
-    		node.sendSegment(localAddress, foreignAddress, 
-    			Protocol.TRANSPORT_PKT, t.pack());
+            // Send the packet over the wire
+            node.sendSegment(localAddress, foreignAddress, 
+                Protocol.TRANSPORT_PKT, t.pack());
 
-    	}catch(IllegalArgumentException iae){
+        }catch(IllegalArgumentException iae){
             System.err.println("AsyncSendHelper: Shouldn't be here " 
-            	+ " passed bad args to Transport constructor");
+                + " passed bad args to Transport constructor");
+            iae.printStackTrace();
+            return;
+        }
+    }
+
+    /**
+     * Handle the write buffer being done. If
+     * the socket is currently being shut down,
+     * then this involves signaling our wrapper
+     * to set the state to closed. Otherwise do
+     * nothing.
+     */
+    private void handleDoneFlushing(){
+        isFlushing = false;
+
+        if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqAcknowledged){
+            System.err.println("AsyncSendHelper: Done flushing, highest seq sent is " 
+                + highestSeqSent + ", highest acknowledged is " + highestSeqAcknowledged);
+            sendFinSignal(highestSeqSent);
+            highestSeqSent++;
+        }
+    }
+
+    /**
+     * Send a FIN signal down the wire and
+     * don't worry if it arrives. This is the
+     * last step in terminating a connection.
+     * 
+     * This method does NOT handle 
+     * book-keeping or resource release. It
+     * merely sends the termination signal.
+     *
+     * @param seqNum int The sequence number
+     *      of the termination sequence. This
+     *      is effectively ignored, so its
+     *      correctness is not necessary.
+     */
+    private void sendFinSignal(int seqNum){
+        Debug.log(node, "AsyncSendHelper: Sending termination signal");
+        try{
+            // Make a transport to send the data
+            Transport t = new Transport(localPort, foreignPort, 
+                Transport.FIN, -1, seqNum, new byte[0]);
+
+            // Send the packet over the wire
+            node.sendSegment(localAddress, foreignAddress, 
+                Protocol.TRANSPORT_PKT, t.pack());
+
+        }catch(IllegalArgumentException iae){
+            System.err.println("AsyncSendHelper: Shouldn't be here " 
+                + " passed bad args to Transport constructor");
             iae.printStackTrace();
             return;
         }
