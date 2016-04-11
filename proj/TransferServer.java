@@ -67,14 +67,14 @@ public class TransferServer extends FishThread {
 
             // start a worker thread to serve the new connection
             node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("connection accepted");
+            node.logOutput("\tconnection accepted");
             TransferWorker worker = new
                 TransferWorker(manager, node, connSock, workerInterval, sz);
             worker.start();
         } else {
             // server socket closed, shutdown
             node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("server shutdown");
+            node.logOutput("\tserver shutdown");
             this.stop();
         }
     }
@@ -109,9 +109,9 @@ public class TransferServer extends FishThread {
                 if (count == -1) {
                     // on error, release the socket immediately
                     node.logError("time = " + manager.now() + " msec");
-                    node.logError("receiving aborted");
-                    node.logError("position = " + pos);
-                    node.logError("releasing connection...");
+                    node.logError("\treceiving aborted");
+                    node.logError("\tposition = " + pos);
+                    node.logError("\treleasing connection...");
                     sock.release();
                     this.stop();
                     return;
@@ -124,10 +124,10 @@ public class TransferServer extends FishThread {
                         if (buf[i] != (byte) i) {
                             // data corrupted
                             node.logError("time = " + manager.now() + " msec");
-                            node.logError("data corruption detected");
-                            node.logError("expected " + (byte) i + ", received " + buf[i]);
-                            node.logError("position = " + pos + " and rel. index " + (i - index));
-                            node.logError("releasing connection...");
+                            node.logError("\tdata corruption detected");
+                            node.logError("\texpected " + (byte) i + ", received " + buf[i]);
+                            node.logError("\tposition = " + pos + " and rel. index " + (i - index));
+                            node.logError("\treleasing connection...");
                             sock.release();
                             this.stop();
                             return;
@@ -146,8 +146,8 @@ public class TransferServer extends FishThread {
             }
 
             node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("connection closed");
-            node.logOutput("total bytes successfully received = " + pos);
+            node.logOutput("\tconnection closed");
+            node.logOutput("\ttotal bytes successfully received = " + pos);
             this.stop();
         }
     }

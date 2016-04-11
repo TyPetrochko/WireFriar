@@ -57,15 +57,15 @@ public class TransferClient extends FishThread {
                 // record starting time
                 startTime = manager.now();
                 node.logOutput("time = " + startTime + " msec");
-                node.logOutput("started");
-                node.logOutput("bytes to send = " + amount);
+                node.logOutput("\tstarted");
+                node.logOutput("\tbytes to send = " + amount);
             }
 
             if (amount == 0) {
                 // sending completed, initiate closure of connection
                 node.logOutput("time = " + manager.now());
-                node.logOutput("sending completed");
-                node.logOutput("closing connection...");
+                node.logOutput("\tsending completed");
+                node.logOutput("\tclosing connection...");
                 sock.close();
                 return;
             }
@@ -86,9 +86,9 @@ public class TransferClient extends FishThread {
             if (count == -1) {
                 // on error, release the socket immediately
                 node.logError("time = " + manager.now() + " msec");
-                node.logError("sending aborted");
-                node.logError("position = " + pos);
-                node.logError("releasing connection...");
+                node.logError("\tsending aborted");
+                node.logError("\tposition = " + pos);
+                node.logError("\treleasing connection...");
                 sock.release();
                 this.stop();
                 return;
@@ -106,11 +106,11 @@ public class TransferClient extends FishThread {
         } else if (sock.isClosed()) {
             finishTime = manager.now();
             node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("connection closed");
-            node.logOutput("total bytes sent = " + pos);
-            node.logOutput("time elapsed = " +
+            node.logOutput("\tconnection closed");
+            node.logOutput("\ttotal bytes sent = " + pos);
+            node.logOutput("\ttime elapsed = " +
                            (finishTime - startTime) + " msec");
-            node.logOutput("Bps = " + pos * 1000.0 / (finishTime - startTime));
+            node.logOutput("\tBps = " + pos * 1000.0 / (finishTime - startTime));
             // release the socket
             sock.release();
             this.stop();

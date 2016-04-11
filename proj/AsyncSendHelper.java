@@ -1,8 +1,10 @@
 import java.lang.reflect.Method;
 
 public class AsyncSendHelper{
-	private final long retryInterval = 100; // how frequently we retry to connect while pending
+	private final int initialRetryInterval = 200; // how frequently we retry to connect while pending
     private final int defaultWindow = 12; // how large should default window be
+    private final double alpha = .125; // meta-var for RTT prediction
+    private final double beta = .25; // meta-var for RTT std. dev prediction
     private final TCPManager tcpMan;
     private final Node node;
     private final TCPSockWrapper wrapper;
@@ -19,6 +21,9 @@ public class AsyncSendHelper{
 
     private boolean isFlushing;
 
+    private int rttEst; // round trip time estimate
+    private int rttDev; // round trip std. dev estimate
+
     public AsyncSendHelper(TCPSockWrapper wrapper, Node node, TCPManager tcpMan, int seq){
     	this.foreignAddress = wrapper.getTCPSock().getForeignAddress();
     	this.foreignPort = wrapper.getTCPSock().getForeignPort();
@@ -31,9 +36,12 @@ public class AsyncSendHelper{
     	this.highestSeqAcknowledged = seq;
     	this.highestSeqSent = seq;
         this.cwnd = defaultWindow;
-    	this.timeout = retryInterval;
+    	this.timeout = initialRetryInterval;
 
     	this.isFlushing = false;
+
+        this.rttEst = initialRetryInterval;
+        this.rttDev = 0;
     }
 
     /**
@@ -53,9 +61,11 @@ public class AsyncSendHelper{
             return;
         }
 
-        // Cancel this packet's callback
+        // Cancel this packet's callback and update RTT estimate/std.dev
         RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
         if(toCancel != null){
+            long rttMeasured = System.currentTimeMillis() - toCancel.getTimeSent();
+            adjustRTT(rttMeasured);
             toCancel.cancelAndRemove();
         }
 
@@ -101,7 +111,7 @@ public class AsyncSendHelper{
             tryToSendBytes(payload, i);
             highestSeqSent++;
 
-            setupSendPacketRetry(payload, i);
+            setupSendPacketRetry(payload, i, System.currentTimeMillis());
         }
     }
 
@@ -112,7 +122,7 @@ public class AsyncSendHelper{
      * @param payload byte[] Bytes to re-send
      * @param seqToAcknowledge int The sequence number to acknowledge
      */
-    public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge){
+    public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge, long timeSent){
         Manager m = tcpMan.getManager();
 
         try{
@@ -122,7 +132,7 @@ public class AsyncSendHelper{
 
             Callback cb = new RetryCallback(method, this, new Object []{
                 (Object) payload,
-                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, payload);
+                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, timeSent, payload);
 
             m.addTimer(this.node.getAddr(), timeout, cb);
         }catch(Exception e){
@@ -153,7 +163,7 @@ public class AsyncSendHelper{
                 byte[] payloadToSend = toResend.getPayload();
 
                 tryToSendBytes(payloadToSend, i);
-                setupSendPacketRetry(payloadToSend, i);
+                setupSendPacketRetry(payloadToSend, i, System.currentTimeMillis());
             }
         }
     }
@@ -252,5 +262,28 @@ public class AsyncSendHelper{
             iae.printStackTrace();
             return;
         }
+    }
+
+    /**
+     * Adjust the RTT estimate and std. dev, along
+     * with the timeout.
+     *
+     * @param rttMeasured long The measured RTT
+     *      of a given ack.
+     */
+    private void adjustRTT(long rttMeasured){
+        // System.err.println("AsyncSendHelper: ADJUSTING for RTT = " + rttMeasured 
+        //     + ", est = " + rttEst 
+        //     + ", RTTdev = " + rttDev 
+        //     + ", timeout = " + timeout);
+        // rttEst = (int)((1.0 - alpha)*rttEst + alpha * rttMeasured);
+        // rttDev = (int)((1.0 - beta)*rttDev + beta*Math.abs(rttEst - rttMeasured));
+        //timeout = rttEst + 4*rttDev;
+        // System.err.println("AsyncSendHelper: Measured rtt: " + rttMeasured);
+        timeout = 200;
+        // System.err.println("AsyncSendHelper: DONE ADJUSTING for RTT = " + rttMeasured 
+        //     + ", est = " + rttEst 
+        //     + ", RTTdev = " + rttDev 
+        //     + ", timeout = " + timeout);
     }
 }

@@ -17,15 +17,19 @@ public class RetryCallback extends Callback {
 	private static Map<Integer, RetryCallback> callbacks = new HashMap<Integer, RetryCallback>();
 
 	private boolean canceled;
+
 	private int seqNum;
+    private long timeSent;
     private byte [] payload;
 
-	public RetryCallback(Method method, Object obj, Object[] params, int seqNum, byte [] payload) {
+	public RetryCallback(Method method, Object obj, Object[] params, int seqNum, long timeSent, byte [] payload) {
 		super(method, obj, params);
 		
 		this.canceled = false;
 		this.seqNum = seqNum;
+        this.timeSent = timeSent;
         this.payload = payload;
+
 		callbacks.put(seqNum, this);
     }
 
@@ -77,8 +81,24 @@ public class RetryCallback extends Callback {
         callbacks.remove(seqNum);
     }
 
+    /**
+     * Get the payload associated with
+     * this callback
+     *
+     * @return byte[] The associated payload.
+     */
     public byte [] getPayload(){
         return payload;
+    }
+
+    /**
+     * Get the send-time associated with
+     * this callback
+     *
+     * @return long The associated send-time.
+     */
+    public long getTimeSent(){
+        return timeSent;
     }
 
     @Override
