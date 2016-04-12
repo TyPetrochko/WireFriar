@@ -4,12 +4,11 @@
  * the timer when the callback fires. It will not automatically
  * do so.
  */
-
 import java.lang.reflect.Method;
 import java.util.*;
 
 public class TransportBuffer {
-	private final Queue<Transport> buffer; 
+	private final Queue<TransportWrapper> buffer; 
 	private final Manager manager;
 	private final Node node;
 
@@ -20,7 +19,7 @@ public class TransportBuffer {
 	private CancelableCallback currentCallback;
 
 	public TransportBuffer(Method method, Object obj, Object[] params, Manager manager, Node node){
-		this.buffer = new LinkedList<Transport>();
+		this.buffer = new LinkedList<TransportWrapper>();
 		this.manager = manager;
 		this.node = node;
 		this.method = method;
@@ -30,6 +29,13 @@ public class TransportBuffer {
 		this.currentCallback = null;
 	}
 
+	/**
+	 * Start the callback timer. When the timer reaches
+	 * zero, the callback method will call with its 
+	 * specified params.
+	 *
+	 * @param timeout The timer in milliseconds.
+	 */
 	public void startTimer(long timeout){
 		if(currentCallback != null){
 			currentCallback.cancel();
@@ -40,30 +46,61 @@ public class TransportBuffer {
 		manager.addTimer(this.node.getAddr(), timeout, currentCallback);
 	}
 
+	/**
+	 * Stop the callback timer.
+	 * @see startTimer
+	 */
 	public void stopTimer(){
 		if(currentCallback != null) {
 			currentCallback.cancel();
 		}
 	}
 
-	public Transport peekTransport(){
-		return (Transport) buffer.peek();
+	/**
+	 * Examing the first Transport (wrapper) in the
+	 * buffer, without removing it.
+	 *
+	 * @return The TransportWrapper at the start of the
+	 * 		queue.
+	 */
+	public TransportWrapper peekTransport(){
+		return (TransportWrapper) buffer.peek();
 	}
 
-	public Transport pollTransport(){
-		return (Transport) buffer.poll();
+	/**
+	 * Examing the first Transport (wrapper) in the
+	 * buffer and remove it.
+	 *
+	 * @return The TransportWrapper to be removed.
+	 */
+	public TransportWrapper pollTransport(){
+		return (TransportWrapper) buffer.poll();
 	}
 
-	public void addTransport(Transport transport){
+	/**
+	 * Add a Transport to buffer.
+	 *
+	 * @param transport The Transport to add to the 
+	 * 		head of the queue.
+	 * @param timeSent The time this Transport
+	 * 		was sent.
+	 */
+	public void addTransport(Transport transport, long timeSent){
 		if(transport == null){
 			System.err.println("TransportBuffer: Gave a null transport");
 			return;
 		}
 
-		buffer.add(transport);
+		buffer.add(new TransportWrapper(transport, timeSent));
 	}
 
-	public Queue<Transport> getAllTransports(){
+	/**
+	 * Retreive the backing buffer of Transport
+	 * Wrappers.
+	 *
+	 * @return The TransportWrapper buffer
+	 */
+	public Queue<TransportWrapper> getAllTransports(){
 		return buffer;
 	}
 }
