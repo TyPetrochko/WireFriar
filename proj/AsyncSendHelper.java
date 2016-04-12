@@ -174,62 +174,6 @@ public class AsyncSendHelper{
     }
 
     /**
-     * Set up a callback to retry this payload
-     * in timeout ms if not acknowledged by then.
-     *
-     * @param payload byte[] Bytes to re-send
-     * @param seqToAcknowledge int The sequence number to acknowledge
-     */
-    public void setupSendPacketRetry(byte [] payload, int seqToAcknowledge){
-        Manager m = tcpMan.getManager();
-
-        try{
-            // Get method to fire on timeout
-            Method method = Callback.getMethod("resendIfNotAcknowledged", 
-                this, new String [] {"[B", "java.lang.Integer"});
-
-            Callback cb = new RetryCallback(method, this, new Object []{
-                (Object) payload,
-                (Object) new Integer(seqToAcknowledge)}, seqToAcknowledge, m.now(), payload);
-
-            m.addTimer(this.node.getAddr(), timeout, cb);
-        }catch(Exception e){
-            System.err.println("AsyncSendHelper: Couldn't send packet");
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Callback to resend a packet 
-     *
-     * @param payload byte[] Bytes to re-send
-     * @param seqToAcknowledge int The sequence number to acknowledge
-     */
-    public void resendIfNotAcknowledged(byte [] payload, Integer seqToAcknowledge){
-        Debug.log(node, "AsyncSendHelper: Callback firing");
-        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
-        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
-        if(seqToAcknowledge <= highestSeqConfirmed){
-            Debug.log(node, "AsyncSendHelper: Shouldn't be here - callback not canceled");
-            return;
-        }
-
-        // prevent other callbacks from firing
-        RetryCallback.cancelAll();
-
-        // re-send all unacknowledged packets
-        for(int i = highestSeqConfirmed + 1; i < highestSeqSent + 1; i++){
-            RetryCallback toResend = RetryCallback.getCallback(i);
-            if(toResend != null){
-                byte[] payloadToSend = toResend.getPayload();
-
-                tryToSendBytes(payloadToSend, i);
-                setupSendPacketRetry(payloadToSend, i);
-            }
-        }
-    }
-
-    /**
      * Determine if flushing is currently
      * in progress.
      *
@@ -351,6 +295,5 @@ public class AsyncSendHelper{
         rttEst = (int)((1.0 - alpha)*rttEst + alpha * rttMeasured);
         rttDev = (int)((1.0 - beta)*rttDev + beta*Math.abs(rttEst - rttMeasured));
         timeout = rttEst + 4*rttDev;
-        System.err.println("Current timeout: " + timeout);
     }
 }
