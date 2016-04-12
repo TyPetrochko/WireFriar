@@ -47,15 +47,15 @@ public class AsyncReceiveHelper {
             return;
         }
 
-        highestSeqReceived += t.getPayload().length;
-
         // abort if not enough space remaining
         if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
-            // System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
+            System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
             Debug.log(node, "AsyncReceiveHelper: Buffer overwhelmed, " 
                 + "dropping packet with sequence number " + t.getSeqNum());
             return;
         }
+
+        highestSeqReceived += t.getPayload().length;
 
         // send ACK
     	try{

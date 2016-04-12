@@ -82,6 +82,9 @@ public class AsyncSendHelper{
         // advance window 
         highestSeqConfirmed = transport.getSeqNum();
 
+        // update window size
+        cwnd = transport.getWindow();
+
         // remove outdated transports
         Queue<TransportWrapper> bufferedTransports = transportBuffer.getAllTransports();
         while(!bufferedTransports.isEmpty()){
@@ -141,13 +144,13 @@ public class AsyncSendHelper{
             // Determine num bytes to send
             int numBytesToSend = 0;
             if(Transport.MAX_PAYLOAD_SIZE <= wrapper.getWriteBuffSize() 
-                && Transport.MAX_PAYLOAD_SIZE <= highestSeqConfirmed + cwnd - highestSeqSent){
+                && Transport.MAX_PAYLOAD_SIZE <= highestSeqConfirmed + cwnd - highestSeqSent + 1){
                 numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
-            }else if(wrapper.getWriteBuffSize() <= Transport.MAX_PAYLOAD_SIZE 
-                && wrapper.getWriteBuffSize() <= highestSeqConfirmed + cwnd - highestSeqSent){
+            }else if(wrapper.getWriteBuffSize() <= Transport.MAX_PAYLOAD_SIZE
+                && wrapper.getWriteBuffSize() <= highestSeqConfirmed + cwnd - highestSeqSent + 1){
                 numBytesToSend = wrapper.getWriteBuffSize();
             }else {
-                numBytesToSend = highestSeqConfirmed + cwnd - highestSeqSent;
+                numBytesToSend = highestSeqConfirmed + cwnd - highestSeqSent + 1;
             }
 
             byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
@@ -163,7 +166,9 @@ public class AsyncSendHelper{
     }
 
     public void goBackN(){
-        Debug.log(node, "AsyncSendHelper: Firing goBackN");
+        Debug.log(node, "AsyncSendHelper: Firing goBackN with " 
+            + transportBuffer.getAllTransports().size() + " remaining transports in buffer");
+
         for(TransportWrapper tw : transportBuffer.getAllTransports()){
             tw.setTimeSent(tcpMan.getManager().now());
             node.sendSegment(localAddress, foreignAddress, 
@@ -182,6 +187,16 @@ public class AsyncSendHelper{
      */
     public boolean isFlushing(){
     	return isFlushing;
+    }
+
+    /**
+     * Determine if there are some un-acknowledged
+     * transports in buffer
+     *
+     * @return True if there are buffered transports
+     */
+    public boolean hasBufferedTransports(){
+        return transportBuffer.getAllTransports().isEmpty();
     }
 
     /**
@@ -241,8 +256,11 @@ public class AsyncSendHelper{
     private void handleDoneFlushing(){
         isFlushing = false;
 
+        transportBuffer.startTimer(timeout);
+
         node.logOutput("time = " + tcpMan.getManager().now() + " msec");
-            node.logOutput("\tDone flushing");
+        node.logOutput("\tDone flushing, still " + transportBuffer.getAllTransports().size() 
+            + " buffered transports");
 
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqConfirmed){
             sendFinSignalNow();
@@ -257,6 +275,11 @@ public class AsyncSendHelper{
      * This method does NOT handle 
      * book-keeping or resource release. It
      * merely sends the termination signal.
+     * The one exception is that it stops the
+     * callback timer. This is to prevent a
+     * glitch in which the last remaining byte
+     * gets resent (forever) even after the
+     * fin signal is sent.
      *
      * @param seqNum int The sequence number
      *      of the termination sequence. This
@@ -267,6 +290,9 @@ public class AsyncSendHelper{
         Debug.log(node, "AsyncSendHelper: Sending termination signal");
         node.logOutput("time = " + tcpMan.getManager().now() + " msec");
         node.logOutput("\tsent FIN to " + wrapper.getTCPSock().getForeignAddress());
+
+        transportBuffer.stopTimer();
+
         try{
             // Make a transport to send the data
             Transport t = new Transport(localPort, foreignPort, 

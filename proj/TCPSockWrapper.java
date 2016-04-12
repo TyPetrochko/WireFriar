@@ -270,11 +270,11 @@ public class TCPSockWrapper{
     public void close(){
         state = State.SHUTDOWN;
 
-        // if sending and nothing to send, close immediately
-        if(sendHelper != null && getWriteBuffSize() == 0){
-            sendHelper.sendFinSignalNow();
-            state = State.CLOSED;
-        }
+        Debug.log(node, "TCPSockWrapper: Received close signal");
+        // Debug.log(node, "\tThere are " + getWriteBuffSize() + " bytes in write buff");
+        // Debug.log(node, "\tThere are " + getReadBuffSize() + " bytes in read buff");
+        // Debug.log(node, "\tIs it flushing? " + sendHelper.isFlushing());
+        // Debug.log(node, "\tAre there unAcked packets? " + sendHelper.hasBufferedTransports());
 
         // if receiving and nothing to receive, close immediately
         if(receiveHelper != null && getReadBuffSize() == 0){
