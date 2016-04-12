@@ -1,8 +1,9 @@
 import java.lang.reflect.Method;
+import java.util.*;
 
 public class AsyncSendHelper{
 	private final int initialRetryInterval = 200; // how frequently we retry to connect while pending
-    private final int defaultWindow = 12; // how large should default window be
+    private final int defaultWindow = 1000; // how large should default window be
     private final double alpha = .125; // meta-var for RTT prediction
     private final double beta = .25; // meta-var for RTT std. dev prediction
     private final TCPManager tcpMan;
@@ -14,8 +15,10 @@ public class AsyncSendHelper{
     private final int localAddress;
     private final int localPort;
 
+    private TransportBuffer transportBuffer;
+
     private int highestSeqSent;
-    private int highestSeqAcknowledged;
+    private int highestSeqConfirmed;
     private int cwnd;
     private long timeout;
 
@@ -33,10 +36,18 @@ public class AsyncSendHelper{
     	this.wrapper = wrapper;
     	this.node = node;
     	this.tcpMan = tcpMan;
-    	this.highestSeqAcknowledged = seq;
+    	this.highestSeqConfirmed = seq;
     	this.highestSeqSent = seq;
         this.cwnd = defaultWindow;
     	this.timeout = initialRetryInterval;
+
+        try{
+            this.transportBuffer = new TransportBuffer(Callback.getMethod("goBackN", this, null), 
+                this, null, tcpMan.getManager(), node);
+        }catch (Exception e){
+            System.err.println("AsyncSendHelper: ERROR; couldn't get goBackN method");
+            e.printStackTrace();
+        }
 
     	this.isFlushing = false;
 
@@ -53,26 +64,63 @@ public class AsyncSendHelper{
      *			ack.
      */
     public void checkAck(Transport transport){
-    	if(transport.getType() != Transport.ACK){
-    		return;
-    	}else if(transport.getSeqNum() != highestSeqAcknowledged + 1){
-    		return;
-    	}else if(wrapper.getState() == TCPSockWrapper.State.CLOSED){
+        Debug.log(node, "AsyncSendHelper: Received ack from server: " + transport.getSeqNum());
+        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
+        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
+    	
+     //    if(transport.getType() != Transport.ACK){
+    	// 	return;
+    	// }else if(transport.getSeqNum() != highestSeqConfirmed + 1){
+     //        Debug.log(node, "AsyncSendHelper: Received out-of-order ACK, flushing now");
+     //        flush();
+    	// 	return;
+    	// }else if(wrapper.getState() == TCPSockWrapper.State.CLOSED){
+     //        return;
+     //    }
+
+        if(transport.getType() != Transport.ACK){
+            System.err.println("AsyncSendHelper: ERROR; somehow received a packet that wasn't an ack");
+            return;
+        }
+
+        if(transport.getSeqNum() > highestSeqConfirmed){
+            // advance window 
+            highestSeqConfirmed = transport.getSeqNum();
+
+            // remove outdated transports
+            Queue<Transport> bufferedTransports = transportBuffer.getAllTransports();
+            while(!bufferedTransports.isEmpty()){
+                Transport t = bufferedTransports.peek();
+                if(t.getSeqNum() + t.getPayload().length < highestSeqConfirmed){
+                    bufferedTransports.poll();
+                }else{
+                    break;
+                }
+            }
+
+            // adjust our RTT estimate/timeout
+            adjustRTT(200);
+
+            // pause timer while we flush
+            transportBuffer.stopTimer();
+
+            // send new packets via flush
+            flush();
             return;
         }
 
         // Cancel this packet's callback and update RTT estimate/std.dev
-        RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
-        if(toCancel != null){
-            long rttMeasured = tcpMan.getManager().now() - toCancel.getTimeSent();
-            adjustRTT(rttMeasured);
-            toCancel.cancelAndRemove();
-        }
+     //    RetryCallback toCancel = RetryCallback.getCallback(transport.getSeqNum());
+     //    if(toCancel != null){
+     //        long rttMeasured = tcpMan.getManager().now() - toCancel.getTimeSent();
+     //        adjustRTT(rttMeasured);
+     //        toCancel.cancelAndRemove();
+     //    }
 
-    	// Received acknowledgement; continue
-    	Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence number " + highestSeqSent);
-    	highestSeqAcknowledged++;
-    	flush();
+    	// // Received acknowledgement; continue
+    	// Debug.log(node, "AsyncSendHelper: Received acknowledgement for sequence number " + highestSeqSent);
+    	// highestSeqConfirmed += transport.getPayload();
+    	// flush();
     }
 
     /**
@@ -84,6 +132,11 @@ public class AsyncSendHelper{
      * command chain.
      */
     public void flush(){
+        Debug.log(node, "AsyncSendHelper: Flushing was called");
+        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
+        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
+
+        // check if we're done flushing
     	if(wrapper.getWriteBuffSize() == 0){
             handleDoneFlushing();
     		return;
@@ -92,7 +145,9 @@ public class AsyncSendHelper{
         }
 
         /* Send full window */
-        for (int i = highestSeqSent + 1; i < highestSeqAcknowledged + cwnd + 1; i++){
+        while(highestSeqSent < highestSeqConfirmed + cwnd){
+
+            // are we done sending?
             if(wrapper.getWriteBuffSize() == 0){
                 handleDoneFlushing();
                 return;
@@ -100,19 +155,42 @@ public class AsyncSendHelper{
 
             // Determine num bytes to send
             int numBytesToSend = 0;
-            if(wrapper.getWriteBuffSize() > Transport.MAX_PAYLOAD_SIZE){
+            if(Transport.MAX_PAYLOAD_SIZE <= wrapper.getWriteBuffSize() 
+                && Transport.MAX_PAYLOAD_SIZE <= highestSeqConfirmed + cwnd - highestSeqSent){
                 numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
-            }else{
+            }else if(wrapper.getWriteBuffSize() <= Transport.MAX_PAYLOAD_SIZE 
+                && wrapper.getWriteBuffSize() <= highestSeqConfirmed + cwnd - highestSeqSent){
                 numBytesToSend = wrapper.getWriteBuffSize();
+            }else {
+                numBytesToSend = highestSeqConfirmed + cwnd - highestSeqSent;
             }
 
+            // if(wrapper.getWriteBuffSize() >= Transport.MAX_PAYLOAD_SIZE &&){
+            //     numBytesToSend = Transport.MAX_PAYLOAD_SIZE;
+            // }else{
+            //     numBytesToSend = wrapper.getWriteBuffSize();
+            // }
+
             byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
+            tryToSendBytes(payload, highestSeqSent + 1);
 
-            tryToSendBytes(payload, i);
-            highestSeqSent++;
+            // advance window
+            highestSeqSent += payload.length;
 
-            setupSendPacketRetry(payload, i);
+            // setupSendPacketRetry(payload, i);
         }
+
+        transportBuffer.startTimer(timeout);
+    }
+
+    public void goBackN(){
+        Debug.log(node, "AsyncSendHelper: Firing goBackN");
+        for(Transport t : transportBuffer.getAllTransports()){
+            node.sendSegment(localAddress, foreignAddress, 
+                Protocol.TRANSPORT_PKT, t.pack());
+        }
+
+        transportBuffer.startTimer(timeout);
     }
 
     /**
@@ -148,7 +226,10 @@ public class AsyncSendHelper{
      * @param seqToAcknowledge int The sequence number to acknowledge
      */
     public void resendIfNotAcknowledged(byte [] payload, Integer seqToAcknowledge){
-        if(seqToAcknowledge <= highestSeqAcknowledged){
+        Debug.log(node, "AsyncSendHelper: Callback firing");
+        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
+        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
+        if(seqToAcknowledge <= highestSeqConfirmed){
             Debug.log(node, "AsyncSendHelper: Shouldn't be here - callback not canceled");
             return;
         }
@@ -157,7 +238,7 @@ public class AsyncSendHelper{
         RetryCallback.cancelAll();
 
         // re-send all unacknowledged packets
-        for(int i = highestSeqAcknowledged + 1; i < highestSeqSent + 1; i++){
+        for(int i = highestSeqConfirmed + 1; i < highestSeqSent + 1; i++){
             RetryCallback toResend = RetryCallback.getCallback(i);
             if(toResend != null){
                 byte[] payloadToSend = toResend.getPayload();
@@ -210,6 +291,8 @@ public class AsyncSendHelper{
             Transport t = new Transport(localPort, foreignPort, 
                 Transport.DATA, -1, seqNum, payload);
 
+            transportBuffer.addTransport(t);
+
             Debug.verifyPacket(node, t);
 
             // Send the packet over the wire
@@ -234,7 +317,10 @@ public class AsyncSendHelper{
     private void handleDoneFlushing(){
         isFlushing = false;
 
-        if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqAcknowledged){
+        node.logOutput("time = " + tcpMan.getManager().now() + " msec");
+            node.logOutput("\tDone flushing");
+
+        if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqConfirmed){
             sendFinSignalNow();
         }
     }
@@ -255,6 +341,8 @@ public class AsyncSendHelper{
      */
     private void sendFinSignal(int seqNum){
         Debug.log(node, "AsyncSendHelper: Sending termination signal");
+        node.logOutput("time = " + tcpMan.getManager().now() + " msec");
+        node.logOutput("\tsent FIN to " + wrapper.getTCPSock().getForeignAddress());
         try{
             // Make a transport to send the data
             Transport t = new Transport(localPort, foreignPort, 

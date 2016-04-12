@@ -140,6 +140,7 @@ public class TCPSockWrapper{
         if(sendHelper == null){
             return -1;
         }else if(sendHelper.isFlushing()){
+            Debug.log(node, "TCPSockWrapper: Received request fo flush, isFlushing = " + sendHelper.isFlushing());
             return 0;
         }else{
             sendHelper.flush();

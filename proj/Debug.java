@@ -1,5 +1,5 @@
 public final class Debug {
-	public static boolean DEBUG = false;
+	public static boolean DEBUG = true;
 
 	private Debug (){}
 

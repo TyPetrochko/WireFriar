@@ -154,6 +154,7 @@ public class TCPSock {
      * Initiate closure of a connection (graceful shutdown)
      */
     public void close() {
+        node.logOutput("time = " + tcpMan.getManager().now() + " msec");
         wrapper.close();
     }
 

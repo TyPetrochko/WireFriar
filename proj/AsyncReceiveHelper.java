@@ -38,23 +38,23 @@ public class AsyncReceiveHelper {
 
     public void processData(Transport t){
     	if(t.getType() == Transport.FIN){
+            node.logOutput("time = " + tcpMan.getManager().now() + " msec");
+            node.logOutput("\treceived FIN from " + wrapper.getTCPSock().getForeignAddress());
             processTermination();
             return;
-        }else if(t.getSeqNum() <= highestSeqReceived){
-    		sendAck(t.getSeqNum()); // didn't get last ACK
-    		return;
-    	}else if(t.getSeqNum() != highestSeqReceived + 1){
-    		return; // discard it (early)
-    	}
+        }else if(t.getSeqNum() != highestSeqReceived + 1){
+            sendAck(highestSeqReceived);
+            return;
+        }
 
-        highestSeqReceived++;
-
-        Debug.verifyPacket(node, t);
+        highestSeqReceived += t.getPayload().length;
 
         // abort if not enough space remaining
         if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
-            System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
-            return; // 
+            // System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
+            Debug.log(node, "AsyncReceiveHelper: Buffer overwhelmed, " 
+                + "dropping packet with sequence number " + t.getSeqNum());
+            return;
         }
 
         // send ACK
@@ -62,7 +62,7 @@ public class AsyncReceiveHelper {
     		wrapper.writeToReadBuff(t.getPayload());
     		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 
     			+ " bytes in read buffer");
-    		sendAck(t.getSeqNum());
+    		sendAck(highestSeqReceived);
     	}catch (BufferOverflowException boe){
     		Debug.log(node, "AsyncReceiveHelper: Read buffer overflowed");
     		boe.printStackTrace();
