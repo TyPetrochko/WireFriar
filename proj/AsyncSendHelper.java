@@ -165,6 +165,9 @@ public class AsyncSendHelper{
         transportBuffer.startTimer(timeout);
     }
 
+    /**
+     * Resend all buffered Transports
+     */
     public void goBackN(){
         Debug.log(node, "AsyncSendHelper: Firing goBackN with " 
             + transportBuffer.getAllTransports().size() + " remaining transports in buffer");
