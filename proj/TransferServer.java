@@ -132,7 +132,8 @@ public class TransferServer extends FishThread {
                             this.stop();
                             return;
                         }else{
-                            Debug.log(node, "VERIFIED " + (byte) i + " at position " + i);
+                            Debug.log(node, "VERIFIED " + (byte) i + " at position " + i + " from address " 
+                                + sock.getForeignAddress());
                         }
                     }
                     Debug.log(node, "TransferServer: Done verifying data!");

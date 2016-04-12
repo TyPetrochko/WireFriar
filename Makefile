@@ -24,7 +24,7 @@ test:
 	perl fishnet.pl simulate 2 scripts/transfertest.fish
 
 bigtest:
-	perl fishnet.pl simulate 4 scripts/bigtest.fish
+	perl fishnet.pl simulate 7 scripts/bigtest.fish
 
 docs:
 	rm -rf javadoc

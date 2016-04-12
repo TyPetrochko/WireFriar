@@ -92,7 +92,7 @@ public class AsyncSendHelper{
             Transport t = tw.getTransport();
 
             // check if this Transport is old (stale)
-            if(t.getSeqNum() + t.getPayload().length < highestSeqConfirmed){
+            if(t.getSeqNum() < highestSeqConfirmed){
                 bufferedTransports.poll();
 
                 // adjust our RTT estimate/timeout
@@ -168,6 +168,14 @@ public class AsyncSendHelper{
     public void goBackN(){
         Debug.log(node, "AsyncSendHelper: Firing goBackN with " 
             + transportBuffer.getAllTransports().size() + " remaining transports in buffer");
+        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
+        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
+        if(transportBuffer.getAllTransports().size() == 1){
+            Debug.log(node, "\tBytes in single transport = " 
+                + transportBuffer.peekTransport().getTransport().getPayload().length);
+            Debug.log(node, "\tSeqNum of single transport = " 
+                + transportBuffer.peekTransport().getTransport().getSeqNum());
+        }
 
         for(TransportWrapper tw : transportBuffer.getAllTransports()){
             tw.setTimeSent(tcpMan.getManager().now());
@@ -176,6 +184,7 @@ public class AsyncSendHelper{
         }
 
         transportBuffer.startTimer(timeout);
+        flush();
     }
 
     /**
