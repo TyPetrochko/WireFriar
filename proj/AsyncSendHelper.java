@@ -2,10 +2,12 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 public class AsyncSendHelper{
-	private final int initialRetryInterval = 200; // how frequently we retry to connect while pending
-    private final int defaultWindow = 1000; // how large should default window be
-    private final double alpha = .125; // meta-var for RTT prediction
-    private final double beta = .25; // meta-var for RTT std. dev prediction
+    private final int INITIAL_RETRY_INTERVAL = 200;     // how frequently we retry a packet (ms)
+    private final int DEFAULT_WINDOW = 1000;            // how large should default window be (bytes)
+    private final double ALPHA = .125;                  // meta-var for RTT prediction (ms)
+    private final double BETA = .25;                    // meta-var for RTT std. dev prediction (ms)
+    private final boolean CONGESTION_CONTROL = true;    // should account for congestion?
+
     private final TCPManager tcpMan;
     private final Node node;
     private final TCPSockWrapper wrapper;
@@ -20,12 +22,17 @@ public class AsyncSendHelper{
     private int highestSeqSent;
     private int highestSeqConfirmed;
     private int cwnd;
-    private long timeout;
-
+    private int timeout;
+    
     private boolean isFlushing;
 
     private int rttEst; // round trip time estimate
     private int rttDev; // round trip std. dev estimate
+
+    /* Congestion control */
+    private int ssThresh;
+    private int lastSeqAckd;
+    private int numAckRepeats;
 
     public AsyncSendHelper(TCPSockWrapper wrapper, Node node, TCPManager tcpMan, int seq){
     	this.foreignAddress = wrapper.getTCPSock().getForeignAddress();
@@ -38,8 +45,12 @@ public class AsyncSendHelper{
     	this.tcpMan = tcpMan;
     	this.highestSeqConfirmed = seq;
     	this.highestSeqSent = seq;
-        this.cwnd = defaultWindow;
-    	this.timeout = initialRetryInterval;
+        this.cwnd = DEFAULT_WINDOW;
+    	this.timeout = INITIAL_RETRY_INTERVAL;
+
+        this.ssThresh = Integer.MAX_VALUE;
+        this.lastSeqAckd = -1;
+        this.numAckRepeats = 0;
 
         try{
             this.transportBuffer = new TransportBuffer(Callback.getMethod("goBackN", this, null), 
@@ -51,7 +62,7 @@ public class AsyncSendHelper{
 
     	this.isFlushing = false;
 
-        this.rttEst = initialRetryInterval;
+        this.rttEst = INITIAL_RETRY_INTERVAL;
         this.rttDev = 0;
     }
 
@@ -60,8 +71,7 @@ public class AsyncSendHelper{
      * this should be called from 
      * TCPSockWrapper.
      *
-     * @param transport Transport The incoming
-     *			ack.
+     * @param transport The incoming ACK signal.
      */
     public void checkAck(Transport transport){
         Debug.log(node, "AsyncSendHelper: Received ack from server: " + transport.getSeqNum());
@@ -74,6 +84,11 @@ public class AsyncSendHelper{
             return;
         }
 
+        // We may want to adjust window for congestion control
+        if(CONGESTION_CONTROL){
+            checkForTripleAck(transport.getSeqNum());
+        }
+
         // make sure that we're not receiving a stale ack
         if(transport.getSeqNum() <= highestSeqConfirmed){
             return;
@@ -83,7 +98,19 @@ public class AsyncSendHelper{
         highestSeqConfirmed = transport.getSeqNum();
 
         // update window size
-        cwnd = transport.getWindow();
+        if(CONGESTION_CONTROL){
+            if(cwnd < ssThresh){
+                cwnd += Transport.MAX_PAYLOAD_SIZE;
+            }else{
+                cwnd += (int)((double) Transport.MAX_PAYLOAD_SIZE / cwnd);
+            }
+
+            // either congestion or flow may limit window
+            cwnd = Math.min(cwnd, transport.getWindow());
+        }else{
+            // use vanilla flow control
+            cwnd = transport.getWindow();
+        }
 
         // remove outdated transports
         Queue<TransportWrapper> bufferedTransports = transportBuffer.getAllTransports();
@@ -101,8 +128,6 @@ public class AsyncSendHelper{
                 break;
             }
         }
-
-        
 
         // pause timer while we flush
         transportBuffer.stopTimer();
@@ -158,21 +183,26 @@ public class AsyncSendHelper{
 
             // advance window
             highestSeqSent += payload.length;
-
-            // setupSendPacketRetry(payload, i);
         }
 
         transportBuffer.startTimer(timeout);
     }
 
     /**
-     * Resend all buffered Transports
+     * Resend all buffered Transports, as the timer
+     * has run out.
      */
     public void goBackN(){
         Debug.log(node, "AsyncSendHelper: Firing goBackN with " 
             + transportBuffer.getAllTransports().size() + " remaining transports in buffer");
         Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
         Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
+
+        if(CONGESTION_CONTROL){
+            ssThresh = (int)(cwnd / 2.0);
+            cwnd = Transport.MAX_PAYLOAD_SIZE;
+        }
+
         if(transportBuffer.getAllTransports().size() == 1){
             Debug.log(node, "\tBytes in single transport = " 
                 + transportBuffer.peekTransport().getTransport().getPayload().length);
@@ -323,6 +353,28 @@ public class AsyncSendHelper{
     }
 
     /**
+     * Adjust the last sequence ACK'ed and its
+     * count, based off of an incoming ACK. If this
+     * is a triple ACK, then we adjust for congestion
+     * control.
+     *
+     * @param seq The incoming packet sequence number
+     */
+    private void checkForTripleAck(int seq){
+        if(lastSeqAckd == seq){
+            numAckRepeats++;
+        }else{
+            lastSeqAckd = seq;
+            numAckRepeats = 1;
+        }
+
+        if(numAckRepeats == 3){
+            cwnd = (int)(cwnd / 2.0);
+            ssThresh = cwnd;
+        }
+    }
+
+    /**
      * Adjust the RTT estimate and std. dev, along
      * with the timeout.
      *
@@ -330,8 +382,8 @@ public class AsyncSendHelper{
      *      of a given ack.
      */
     private void adjustRTT(long rttMeasured){
-        rttEst = (int)((1.0 - alpha)*rttEst + alpha * rttMeasured);
-        rttDev = (int)((1.0 - beta)*rttDev + beta*Math.abs(rttEst - rttMeasured));
+        rttEst = (int)((1.0 - ALPHA)*rttEst + ALPHA * rttMeasured);
+        rttDev = (int)((1.0 - BETA)*rttDev + BETA * Math.abs(rttEst - rttMeasured));
         timeout = rttEst + 4*rttDev;
     }
 }

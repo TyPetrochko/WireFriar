@@ -6,7 +6,7 @@
 edge 0 1 lossRate 0.0 delay 4 bw 10000 bt 1000
 edge 0 2 lossRate 0.1 delay 500 bw 10000 bt 1000
 edge 0 3 lossRate 0.05 delay 10 bw 10000 bt 1000
-edge 0 4 lossRate 0.25 delay 5 bw 10000 bt 1000
+edge 0 4 lossRate 0.15 delay 5 bw 10000 bt 1000
 edge 0 5 lossRate 0.05 delay 300 bw 10000 bt 1000
 edge 0 6 lossRate 0.0 delay 200 bw 10000 bt 1000
 time + 5

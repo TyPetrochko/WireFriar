@@ -26,6 +26,9 @@ test:
 bigtest:
 	perl fishnet.pl simulate 7 scripts/bigtest.fish
 
+buffertest:
+	perl fishnet.pl simulate 2 scripts/buffertest.fish
+
 docs:
 	rm -rf javadoc
 	mkdir javadoc
