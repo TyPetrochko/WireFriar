@@ -40,12 +40,18 @@ public class AsyncReceiveHelper {
     	if(t.getType() == Transport.FIN){
             node.logOutput("time = " + tcpMan.getManager().now() + " msec");
             node.logOutput("\treceived FIN from " + wrapper.getTCPSock().getForeignAddress());
+            Debug.trace("F");
             processTermination();
             return;
         }else if(t.getSeqNum() != highestSeqReceived + 1){
+            Debug.trace(".");
+            Debug.trace("!");
+            Debug.trace("?");
             sendAck(highestSeqReceived);
             return;
         }
+
+        Debug.trace(".");
 
         // abort if not enough space remaining
         if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
@@ -62,6 +68,7 @@ public class AsyncReceiveHelper {
     		wrapper.writeToReadBuff(t.getPayload());
     		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 
     			+ " bytes in read buffer");
+            Debug.trace(":");
     		sendAck(highestSeqReceived);
     	}catch (BufferOverflowException boe){
     		Debug.log(node, "AsyncReceiveHelper: Read buffer overflowed");

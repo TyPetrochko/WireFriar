@@ -212,6 +212,8 @@ public class TCPSockWrapper{
             node.sendSegment(sock.getLocalAddress(), destAddr, 
                 Protocol.TRANSPORT_PKT, t.pack());
 
+            Debug.log("S");
+
             // Reflect state change
             this.state = State.SYN_SENT;
 
@@ -522,6 +524,8 @@ public class TCPSockWrapper{
             // Send the packet
             node.sendSegment(localAddress, foreignAddress, 
                 Protocol.TRANSPORT_PKT, t.pack());
+
+            Debug.trace("S");
 
         }catch (IllegalArgumentException iae){
             System.err.println("TCPSockWrapper: Passed bad args to Transport constructor");

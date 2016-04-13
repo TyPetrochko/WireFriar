@@ -70,7 +70,7 @@ public class TransferClient extends FishThread {
                 return;
             }
 
-            node.logOutput("sending " + amount + " bytes");
+            // node.logOutput("sending " + amount + " bytes");
             int index = pos % buf.length;
 
             if (index == 0) {

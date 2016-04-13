@@ -141,9 +141,9 @@ public class TransferServer extends FishThread {
 
                 pos += count;
 
-                node.logOutput("time = " + manager.now() + " msec");
-                node.logOutput("\tbytes received from " 
-                    + sock.getForeignAddress() + " = " + count);
+                // node.logOutput("time = " + manager.now() + " msec");
+                // node.logOutput("\tbytes received from " 
+                //     + sock.getForeignAddress() + " = " + count);
                 return;
             }
 

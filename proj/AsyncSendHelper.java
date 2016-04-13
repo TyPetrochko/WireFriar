@@ -91,7 +91,10 @@ public class AsyncSendHelper{
 
         // make sure that we're not receiving a stale ack
         if(transport.getSeqNum() <= highestSeqConfirmed){
+            Debug.trace("?");
             return;
+        }else{
+            Debug.trace(":");
         }
 
         // advance window 
@@ -107,9 +110,12 @@ public class AsyncSendHelper{
 
             // either congestion or flow may limit window
             cwnd = Math.min(cwnd, transport.getWindow());
+            Debug.log("AsyncSendHelper: CWND = " + cwnd);
+            Debug.log("AsyncSendHelper: ssThresh = " + ssThresh);
         }else{
             // use vanilla flow control
             cwnd = transport.getWindow();
+            Debug.log("AsyncSendHelper: CWND = " + cwnd);
         }
 
         // remove outdated transports
@@ -181,6 +187,8 @@ public class AsyncSendHelper{
             byte[] payload = wrapper.readFromWriteBuff(numBytesToSend);
             tryToSendBytes(payload, highestSeqSent + 1);
 
+            Debug.trace(".");
+
             // advance window
             highestSeqSent += payload.length;
         }
@@ -201,6 +209,8 @@ public class AsyncSendHelper{
         if(CONGESTION_CONTROL){
             ssThresh = (int)(cwnd / 2.0);
             cwnd = Transport.MAX_PAYLOAD_SIZE;
+            Debug.log("AsyncSendHelper: CWND = " + cwnd);
+            Debug.log("AsyncSendHelper: SSTHRESH = " + ssThresh);
         }
 
         if(transportBuffer.getAllTransports().size() == 1){
@@ -212,6 +222,7 @@ public class AsyncSendHelper{
 
         for(TransportWrapper tw : transportBuffer.getAllTransports()){
             tw.setTimeSent(tcpMan.getManager().now());
+            Debug.log("!");
             node.sendSegment(localAddress, foreignAddress, 
                 Protocol.TRANSPORT_PKT, tw.getTransport().pack());
         }
@@ -300,9 +311,9 @@ public class AsyncSendHelper{
 
         transportBuffer.startTimer(timeout);
 
-        node.logOutput("time = " + tcpMan.getManager().now() + " msec");
-        node.logOutput("\tDone flushing, still " + transportBuffer.getAllTransports().size() 
-            + " buffered transports");
+        // node.logOutput("time = " + tcpMan.getManager().now() + " msec");
+        // node.logOutput("\tDone flushing, still " + transportBuffer.getAllTransports().size() 
+        //     + " buffered transports");
 
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqConfirmed){
             sendFinSignalNow();
@@ -330,8 +341,8 @@ public class AsyncSendHelper{
      */
     private void sendFinSignal(int seqNum){
         Debug.log(node, "AsyncSendHelper: Sending termination signal");
-        node.logOutput("time = " + tcpMan.getManager().now() + " msec");
-        node.logOutput("\tsent FIN to " + wrapper.getTCPSock().getForeignAddress());
+        // node.logOutput("time = " + tcpMan.getManager().now() + " msec");
+        // node.logOutput("\tsent FIN to " + wrapper.getTCPSock().getForeignAddress());
 
         transportBuffer.stopTimer();
 
@@ -343,6 +354,8 @@ public class AsyncSendHelper{
             // Send the packet over the wire
             node.sendSegment(localAddress, foreignAddress, 
                 Protocol.TRANSPORT_PKT, t.pack());
+
+            Debug.trace("F");
 
         }catch(IllegalArgumentException iae){
             System.err.println("AsyncSendHelper: Shouldn't be here " 
@@ -372,6 +385,9 @@ public class AsyncSendHelper{
             cwnd = (int)(cwnd / 2.0);
             ssThresh = cwnd;
         }
+
+        Debug.log("AsyncSendHelper: CWND = " + cwnd);
+        Debug.log("AsyncSendHelper: ssThresh = " + ssThresh);
     }
 
     /**
