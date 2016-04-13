@@ -13,11 +13,22 @@ public class RequestTuple {
     public final int localAddress;
     public final int localPort;
 
+    private int startSeq;
+
+    public RequestTuple(int foreignAddress, int foreignPort, int localAddress, int localPort, int startSeq){
+        this(foreignAddress, foreignPort, localAddress, localPort);
+        this.startSeq = startSeq;
+    }
+
     public RequestTuple(int foreignAddress, int foreignPort, int localAddress, int localPort){
         this.foreignAddress = foreignAddress;
         this.foreignPort = foreignPort;
         this.localAddress = localAddress;
         this.localPort = localPort;
+    }
+
+    public int getStartSeq(){
+        return this.startSeq;
     }
 
     @Override

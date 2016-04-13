@@ -2,7 +2,7 @@
  * A utility debug class
  */
 public final class Debug {
-	public static boolean DEBUG = true;
+	public static boolean DEBUG = false;
 	public static boolean TRACE = true;
 
 	private Debug (){}

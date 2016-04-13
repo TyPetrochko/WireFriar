@@ -59,7 +59,8 @@ public class TCPSockWrapper{
      */
     public TCPSockWrapper(TCPManager tcpMan, Node node, int readBuffSize, int writeBuffSize, 
         int foreignAddress, int foreignPort,
-        int localAddress, int localPort){
+        int localAddress, int localPort,
+        int startSeq){
         this.tcpMan = tcpMan;
         this.node = node;
         this.sock = new TCPSock(tcpMan, this, 
@@ -68,7 +69,7 @@ public class TCPSockWrapper{
         this.readBuff = ByteBuffer.allocate(readBuffSize);
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.ESTABLISHED;
-        this.startSeq = 1;
+        this.startSeq = startSeq;
         this.requestsBacklog = -1;
     }
 
@@ -247,7 +248,8 @@ public class TCPSockWrapper{
             nextRequest.foreignAddress,
             nextRequest.foreignPort,
             sock.getLocalAddress(),
-            sock.getLocalPort());
+            sock.getLocalPort(),
+            nextRequest.getStartSeq());
 
         int success = tcpMan.bind(newConnectionWrapper, nextRequest.localPort,
             nextRequest.foreignAddress, nextRequest.foreignPort);
@@ -480,7 +482,7 @@ public class TCPSockWrapper{
      */
     private void processIncomingRequest(Transport transport, int from){
         RequestTuple newlyPendingConnection = new RequestTuple(from, transport.getSrcPort(), 
-            sock.getLocalAddress(), sock.getLocalPort());
+            sock.getLocalAddress(), sock.getLocalPort(), transport.getSeqNum());
 
         if(pendingConnections.contains(newlyPendingConnection)){
             return; // duplicate request
