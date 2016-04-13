@@ -259,7 +259,7 @@ public class TCPSockWrapper{
 
         newConnectionWrapper.setReceiveHelper();
 
-        sendConnectionAcknowledgement(nextRequest);
+        sendConnectionAcknowledgement(nextRequest, startSeq + 1);
         return newConnectionWrapper.getTCPSock();
     }
 
@@ -376,7 +376,7 @@ public class TCPSockWrapper{
      * is the starting point for TCP Code.
      */
     public void setReceiveHelper(){
-        this.receiveHelper = new AsyncReceiveHelper(this, node, tcpMan, startSeq);
+        this.receiveHelper = new AsyncReceiveHelper(this, node, tcpMan, startSeq + 1);
     }
 
     /* ###############################
@@ -511,17 +511,18 @@ public class TCPSockWrapper{
      * the original ACK was never received.
      *
      * @param req The node to acknowledge (as request four-tuple)
+     * @param seqNum The sequence number to acknowledge
      */
-    private void sendConnectionAcknowledgement(RequestTuple req){
-        sendConnectionAcknowledgement(req.foreignAddress, req.foreignPort, req.localAddress, req.localPort);
+    private void sendConnectionAcknowledgement(RequestTuple req, int seqNum){
+        sendConnectionAcknowledgement(req.foreignAddress, req.foreignPort, req.localAddress, req.localPort, seqNum);
     }
 
     private void sendConnectionAcknowledgement(int foreignAddress, int foreignPort, 
-        int localAddress, int localPort){
+        int localAddress, int localPort, int seqNum){
         try{
             // Create an acknowledgement packet
             Transport t = new Transport(localPort, foreignPort, 
-                Transport.ACK, -1, startSeq, new byte[0]); // use window size -1
+                Transport.ACK, -1, seqNum, new byte[0]); // use window size -1
 
             // Send the packet
             node.sendSegment(localAddress, foreignAddress, 
@@ -556,7 +557,7 @@ public class TCPSockWrapper{
             case Transport.SYN:
                 Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
                 sendConnectionAcknowledgement(from, transport.getSrcPort(), 
-                    node.getAddr(), transport.getDestPort());
+                    node.getAddr(), transport.getDestPort(), transport.getSeqNum() + 1);
                 break;
             case Transport.ACK:
                 if(sendHelper != null){

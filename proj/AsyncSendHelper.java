@@ -91,6 +91,8 @@ public class AsyncSendHelper{
 
         // make sure that we're not receiving a stale ack
         if(transport.getSeqNum() <= highestSeqConfirmed){
+            Debug.log("AsyncSendHelper: Received seqNum = " + transport.getSeqNum() 
+                + ", expected " + highestSeqConfirmed);
             Debug.trace("?");
             return;
         }else{
@@ -98,7 +100,7 @@ public class AsyncSendHelper{
         }
 
         // advance window 
-        highestSeqConfirmed = transport.getSeqNum();
+        highestSeqConfirmed = transport.getSeqNum() - 1;
 
         // update window size
         if(CONGESTION_CONTROL){
