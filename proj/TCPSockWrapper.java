@@ -12,7 +12,8 @@ import java.util.*;
 import java.lang.reflect.Method;
 
 public class TCPSockWrapper{
-    private final long retryInterval = 100; // how frequently we retry to connect while pending
+    private final long retryInterval = 200; // how frequently we retry to connect while pending
+    private final int maxStartSeq = 100; // the greatest possible start sequence (random)
     private final TCPManager tcpMan;
     private final Node node;
     private final TCPSock sock;
@@ -49,7 +50,7 @@ public class TCPSockWrapper{
         this.readBuff = ByteBuffer.allocate(readBuffSize);
         this.writeBuff = ByteBuffer.allocate(writeBuffSize);
         this.state = State.READY;
-        this.startSeq = 1;
+        this.startSeq = (int)(Math.random() * maxStartSeq);
         this.requestsBacklog = -1;
     }
 
@@ -261,7 +262,7 @@ public class TCPSockWrapper{
 
         newConnectionWrapper.setReceiveHelper();
 
-        sendConnectionAcknowledgement(nextRequest, startSeq + 1);
+        sendConnectionAcknowledgement(nextRequest, nextRequest.getStartSeq());
         return newConnectionWrapper.getTCPSock();
     }
 
@@ -461,7 +462,7 @@ public class TCPSockWrapper{
         }else if(transport.getType() != Transport.ACK){
             Debug.log(node, "TCPSockWrapper: Received a non-acknowledgement while connection pending");
             return;
-        }else if(transport.getSeqNum() != startSeq + 1){
+        }else if(transport.getSeqNum() != startSeq){
             Debug.log(node, "TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
             Debug.log(node, "\tExpected: " + startSeq);
             Debug.log(node, "\tReceived: " + transport.getSeqNum());

@@ -287,8 +287,6 @@ public class AsyncSendHelper{
 
             transportBuffer.addTransport(t, tcpMan.getManager().now());
 
-            Debug.verifyPacket(node, t);
-
             // Send the packet over the wire
             node.sendSegment(localAddress, foreignAddress, 
                 Protocol.TRANSPORT_PKT, t.pack());
