@@ -34,16 +34,21 @@ public class AsyncReceiveHelper {
     	Debug.log(node, "AsyncReceiveHelper: Initializing a new receive helper");
     	Debug.log(node, "\tForeign address " + foreignAddress + ":" + foreignPort);
     	Debug.log(node, "\tLocal address " + localAddress + ":" + localPort);
+        Debug.log(node, "\tInitial sequence " + highestSeqReceived);
     }
 
     public void processData(Transport t){
+        Debug.log("AsyncReceiveHelper: Received a sequence with length " + t.getPayload().length);
     	if(t.getType() == Transport.FIN){
             node.logOutput("time = " + tcpMan.getManager().now() + " msec");
             node.logOutput("\treceived FIN from " + wrapper.getTCPSock().getForeignAddress());
             Debug.trace("F");
             processTermination();
             return;
-        }else if(t.getSeqNum() != highestSeqReceived + 1){
+        }else if(t.getSeqNum() != highestSeqReceived){
+            Debug.log("AsyncReceiveHelper: Received sequence number " 
+                + t.getSeqNum() + ", expected " + (highestSeqReceived));
+            Debug.log("\tPacket size = " + t.getPayload().length);
             Debug.trace(".");
             Debug.trace("!");
             Debug.trace("?");
@@ -52,7 +57,8 @@ public class AsyncReceiveHelper {
         }
 
         Debug.trace(".");
-
+        Debug.log("AsyncReceiveHelper: Received sequence number " 
+            + t.getSeqNum() + ", expected " + highestSeqReceived + 1);
         // abort if not enough space remaining
         if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
             System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
