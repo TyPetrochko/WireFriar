@@ -459,8 +459,10 @@ public class TCPSockWrapper{
         }else if(transport.getType() != Transport.ACK){
             Debug.log(node, "TCPSockWrapper: Received a non-acknowledgement while connection pending");
             return;
-        }else if(transport.getSeqNum() != startSeq){
+        }else if(transport.getSeqNum() != startSeq + 1){
             Debug.log(node, "TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
+            Debug.log(node, "\tExpected: " + startSeq);
+            Debug.log(node, "\tReceived: " + transport.getSeqNum());
             return;
         }
 
