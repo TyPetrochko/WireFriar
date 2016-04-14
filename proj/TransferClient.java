@@ -105,12 +105,12 @@ public class TransferClient extends FishThread {
             return;
         } else if (sock.isClosed()) {
             finishTime = manager.now();
-            node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("\tconnection closed");
-            node.logOutput("\ttotal bytes sent = " + pos);
-            node.logOutput("\ttime elapsed = " +
+            Debug.stat(node, "time = " + manager.now() + " msec");
+            Debug.stat(node, "\tconnection closed");
+            Debug.stat(node, "\ttotal bytes sent = " + pos);
+            Debug.stat(node, "\ttime elapsed = " +
                            (finishTime - startTime) + " msec");
-            node.logOutput("\tBps = " + pos * 1000.0 / (finishTime - startTime));
+            Debug.stat(node, "\tBps = " + pos * 1000.0 / (finishTime - startTime));
             // release the socket
             sock.release();
             this.stop();

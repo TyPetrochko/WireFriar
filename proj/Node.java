@@ -91,11 +91,19 @@ public class Node {
             return;
         }
 
-	if(this.matchPingCommand(command)) {
-	    return;
-	}
+    	if(this.matchPingCommand(command)) {
+    	    return;
+    	}
 
-	logError("Unrecognized command: " + command);
+        if(this.matchCongestionControlCommand(command)){
+            return;
+        }
+
+        if(this.matchDebugCommand(command)){
+            return;
+        }
+
+    	logError("Unrecognized command: " + command);
     }
 
     /**
@@ -344,4 +352,68 @@ public class Node {
 
         return false;
     }
+
+    private boolean matchCongestionControlCommand(String command){
+        // congestion-control command syntax:
+        //     congestion-control [on, off]
+        // Synopsis:
+        //     Enable or disable congestion control for testing
+        //     purposes
+
+        String[] args = command.split(" ");
+        if (args.length != 2 || !args[0].equals("congestion-control")) {
+            return false;
+        }
+
+        switch (args[1]) {
+            case "ON":
+            case "on":  AsyncSendHelper.CONGESTION_CONTROL = true;
+                        return true;
+            case "OFF":
+            case "off": AsyncSendHelper.CONGESTION_CONTROL = false;
+                        return true;
+            default:    return false;
+        }
+    }
+
+    private boolean matchDebugCommand(String command){
+        // debug command syntax:
+        //     [debug, trace, stat] [on, off]
+        // Synopsis:
+        //     Enable or disable debug statements or signal trace
+
+        String[] args = command.split(" ");
+        if (args.length != 2) {
+            return false;
+        }else if(!args[0].equals("debug") && !args[0].equals("trace") && !args[0].equals("statistics")){
+            return false;
+        }
+
+        boolean newVal = false;
+        switch (args[1]) {
+            case "ON":
+            case "on":  newVal = true;
+                        break;
+            case "OFF":
+            case "off": newVal = false;
+                        break;
+            default:    return false;
+        }
+
+        if(args[0].equals("debug")){
+            Debug.DEBUG = newVal;
+        }else if(args[0].equals("trace")){
+            Debug.TRACE = newVal;
+        }else if(args[0].equals("statistics")){
+            Debug.STATISTICS = newVal;
+        }else{
+            System.err.println("Command parser shouldn't reach here");
+            return false;
+        }
+
+        return true;
+
+    }
+
+
 }

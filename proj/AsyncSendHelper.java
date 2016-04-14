@@ -2,11 +2,12 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 public class AsyncSendHelper{
-    private final int INITIAL_RETRY_INTERVAL = 1000;         // how frequently we retry a packet (ms)
+    public static boolean CONGESTION_CONTROL = true;        // should account for congestion?
+    
+    private final int INITIAL_RETRY_INTERVAL = 1000;        // how frequently we retry a packet (ms)
     private final int DEFAULT_WINDOW = Integer.MAX_VALUE;   // how large should default window be (bytes)
     private final double ALPHA = .125;                      // meta-var for RTT prediction (ms)
     private final double BETA = .25;                        // meta-var for RTT std. dev prediction (ms)
-    private final boolean CONGESTION_CONTROL = true;        // should account for congestion?
 
     private final TCPManager tcpMan;
     private final Node node;
@@ -316,6 +317,7 @@ public class AsyncSendHelper{
         //     + " buffered transports");
 
         if(wrapper.getState() == TCPSockWrapper.State.SHUTDOWN && highestSeqSent == highestSeqConfirmed){
+            wrapper.setClosed();
             sendFinSignalNow();
         }
     }

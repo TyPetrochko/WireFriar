@@ -147,9 +147,9 @@ public class TransferServer extends FishThread {
                 return;
             }
 
-            node.logOutput("time = " + manager.now() + " msec");
-            node.logOutput("\tconnection closed");
-            node.logOutput("\ttotal bytes successfully received from " 
+            Debug.stat(node, "time = " + manager.now() + " msec");
+            Debug.stat(node, "\tconnection closed");
+            Debug.stat(node, "\ttotal bytes successfully received from " 
                 + sock.getForeignAddress() + " = " + pos);
             this.stop();
         }
