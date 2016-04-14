@@ -4,4 +4,3 @@ Fishnet to simulate network lossage.
 Supports go-back-n TCP algorithm.
 
 Email tyler.petrochko@yale.edu for questions.
-
