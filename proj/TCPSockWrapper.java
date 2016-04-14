@@ -214,7 +214,7 @@ public class TCPSockWrapper{
             node.sendSegment(sock.getLocalAddress(), destAddr, 
                 Protocol.TRANSPORT_PKT, t.pack());
 
-            Debug.log("S");
+            Debug.trace("S");
 
             // Reflect state change
             this.state = State.SYN_SENT;

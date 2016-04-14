@@ -2,11 +2,11 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 public class AsyncSendHelper{
-    private final int INITIAL_RETRY_INTERVAL = 200;     // how frequently we retry a packet (ms)
-    private final int DEFAULT_WINDOW = 1000;            // how large should default window be (bytes)
-    private final double ALPHA = .125;                  // meta-var for RTT prediction (ms)
-    private final double BETA = .25;                    // meta-var for RTT std. dev prediction (ms)
-    private final boolean CONGESTION_CONTROL = true;    // should account for congestion?
+    private final int INITIAL_RETRY_INTERVAL = 1000;         // how frequently we retry a packet (ms)
+    private final int DEFAULT_WINDOW = Integer.MAX_VALUE;   // how large should default window be (bytes)
+    private final double ALPHA = .125;                      // meta-var for RTT prediction (ms)
+    private final double BETA = .25;                        // meta-var for RTT std. dev prediction (ms)
+    private final boolean CONGESTION_CONTROL = true;        // should account for congestion?
 
     private final TCPManager tcpMan;
     private final Node node;
@@ -224,7 +224,7 @@ public class AsyncSendHelper{
 
         for(TransportWrapper tw : transportBuffer.getAllTransports()){
             tw.setTimeSent(tcpMan.getManager().now());
-            Debug.log("!");
+            Debug.trace("!");
             node.sendSegment(localAddress, foreignAddress, 
                 Protocol.TRANSPORT_PKT, tw.getTransport().pack());
         }

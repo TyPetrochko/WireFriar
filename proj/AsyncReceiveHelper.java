@@ -49,7 +49,6 @@ public class AsyncReceiveHelper {
             Debug.log("AsyncReceiveHelper: Received sequence number " 
                 + t.getSeqNum() + ", expected " + (highestSeqReceived));
             Debug.log("\tPacket size = " + t.getPayload().length);
-            Debug.trace(".");
             Debug.trace("!");
             Debug.trace("?");
             sendAck(highestSeqReceived);
