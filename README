@@ -1,6 +1,66 @@
-A fully-functional TCP reliable transport protocol implementation using 
-Fishnet to simulate network lossage.
+This submission included a fully-functional TCP reliable transport protocol 
+implementation using Fishnet to simulate network lossage. This implementation 
+uses the go-back-n TCP algorithm. For implementation/design related concerns,
+visit the specification document, report.pdf, or the generated javadoc. To
+view the javadoc, open javadoc/index.html in any browser. For easier viewing,
+you can also visit this project's GitHub repository at 
+https://github.com/TyPetrochko/WireFriar
 
-Supports go-back-n TCP algorithm.
+To compile all the code, enter
+
+	$ make
+
+without any parameters in your terminal.
+
+To test this implementation, you can run the following tests with make commands.
+
+To run a simple exchange between two nodes via TCP, enter
+
+	$ make simpletest
+
+into your terminal. This will give some basic statistics on the data 
+transmission rate, as well as a confirmation that all the data was correctly
+received. The expected output is listed in the Tests section of report.pdf.
+
+To run a slightly more complicated test, namely an exchange with congestion
+control and one without, enter
+
+	$ make buffertest
+
+Lastly, a larger test case that fully captures the benefits of congestion 
+control (as described in the design document) can be run by entering
+
+	$ make congestion
+
+(for a test WITH congestion control), and
+
+	$ make no-congestion
+
+... for a test without congestion control. Like the simple test, all the 
+expected outputs are included in report.pdf.
+
+In addition to all of the simulation tests, this design is inter-operable
+with the provided program. Thus, if we start the trawler and connect using,
+for example:
+
+	$ perl fishnet.pl emulate <trawler-host> 8888 10000
+
+we can use the transfer and server commands implemented in the test program.
+When running emulation mode, I also added the following commands:
+
+	trace off
+	trace on
+	
+	debug off
+	debug on
+	
+as well as the additional commands
+
+	statistics on
+	statistics off
+
+in simulation node. It is highly not recommended to set debug off, as this 
+causes hundreds of thousands of debug lines to be printed every second.
 
 Email tyler.petrochko@yale.edu for questions.
+

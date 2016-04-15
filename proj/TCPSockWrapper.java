@@ -103,12 +103,9 @@ public class TCPSockWrapper{
             Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + writeBuff.limit());
             Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + writeBuff.capacity());
             Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + writeBuff.array()[0]);
+            
             writeBuff.put(bytes);
-            Debug.log(node, "\t\tTCPSockWrapper: Write Buff State POST-write = ");
-            Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + writeBuff.position());
-            Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + writeBuff.limit());
-            Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + writeBuff.capacity());
-            Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + writeBuff.array()[0]);
+
         }catch(ReadOnlyBufferException robe){
             System.err.println("TCPSockWrapper: can't write to write buffer");
             robe.printStackTrace();
@@ -142,7 +139,6 @@ public class TCPSockWrapper{
         if(sendHelper == null){
             return -1;
         }else if(sendHelper.isFlushing()){
-            Debug.log(node, "TCPSockWrapper: Received request fo flush, isFlushing = " + sendHelper.isFlushing());
             return 0;
         }else{
             sendHelper.flush();
@@ -276,10 +272,6 @@ public class TCPSockWrapper{
         state = State.SHUTDOWN;
 
         Debug.log(node, "TCPSockWrapper: Received close signal");
-        // Debug.log(node, "\tThere are " + getWriteBuffSize() + " bytes in write buff");
-        // Debug.log(node, "\tThere are " + getReadBuffSize() + " bytes in read buff");
-        // Debug.log(node, "\tIs it flushing? " + sendHelper.isFlushing());
-        // Debug.log(node, "\tAre there unAcked packets? " + sendHelper.hasBufferedTransports());
 
         // if receiving and nothing to receive, close immediately
         if(receiveHelper != null && getReadBuffSize() == 0){
@@ -392,11 +384,6 @@ public class TCPSockWrapper{
      * if necessary.
      */
     private byte [] readFromBuffer(int numBytes, ByteBuffer buff){
-        Debug.log(node, "\t\tTCPSockWrapper: State PRE-read = ");
-        Debug.log(node, "\t\t\tTCPSockWrapper: Position: " + buff.position());
-        Debug.log(node, "\t\t\tTCPSockWrapper: Limit: " + buff.limit());
-        Debug.log(node, "\t\t\tTCPSockWrapper: Capacity: " + buff.capacity());
-        Debug.log(node, "\t\t\tTCPSockWrapper: First byte: " + buff.array()[0]);
 
         buff.flip(); // set the limit to current position, then position to 0
         try{
@@ -464,8 +451,6 @@ public class TCPSockWrapper{
             return;
         }else if(transport.getSeqNum() != startSeq){
             Debug.log(node, "TCPSockWrapper: Received acknowledgement, but the seq num was wrong");
-            Debug.log(node, "\tExpected: " + startSeq);
-            Debug.log(node, "\tReceived: " + transport.getSeqNum());
             return;
         }
 
@@ -489,9 +474,11 @@ public class TCPSockWrapper{
             return; // duplicate request
         }else if(pendingConnections.size() < requestsBacklog){
             pendingConnections.add(newlyPendingConnection);
-            Debug.log(node, "TCPSockWrapper: Added a new request from " + from + " to queue");
+            Debug.log(node, "TCPSockWrapper: Added a new request from " 
+                + from + " to queue");
         }else{
-            Debug.log(node, "TCPSockWrapper: Couldn't accept a new request from " + from + " to queue: queue full");
+            Debug.log(node, "TCPSockWrapper: Couldn't accept a new request from " 
+                + from + " to queue: queue full");
             if(state == State.ESTABLISHED)
                 Debug.log(node, "\tState: ESTABLISHED");
             else if(state == State.SYN_SENT)
@@ -517,7 +504,8 @@ public class TCPSockWrapper{
      * @param seqNum The sequence number to acknowledge
      */
     private void sendConnectionAcknowledgement(RequestTuple req, int seqNum){
-        sendConnectionAcknowledgement(req.foreignAddress, req.foreignPort, req.localAddress, req.localPort, seqNum);
+        sendConnectionAcknowledgement(req.foreignAddress, req.foreignPort, 
+            req.localAddress, req.localPort, seqNum);
     }
 
     private void sendConnectionAcknowledgement(int foreignAddress, int foreignPort, 
@@ -558,7 +546,6 @@ public class TCPSockWrapper{
                 }
                 break;
             case Transport.SYN:
-                Debug.log(node, "TCPSockWrapper: Client didn't get original acknowledgement, re-sending now...");
                 sendConnectionAcknowledgement(from, transport.getSrcPort(), 
                     node.getAddr(), transport.getDestPort(), transport.getSeqNum() + 1);
                 break;

@@ -48,7 +48,6 @@ public class AsyncReceiveHelper {
         }else if(t.getSeqNum() != highestSeqReceived){
             Debug.log("AsyncReceiveHelper: Received sequence number " 
                 + t.getSeqNum() + ", expected " + (highestSeqReceived));
-            Debug.log("\tPacket size = " + t.getPayload().length);
             Debug.trace("!");
             Debug.trace("?");
             sendAck(highestSeqReceived);
@@ -58,11 +57,10 @@ public class AsyncReceiveHelper {
         Debug.trace(".");
         Debug.log("AsyncReceiveHelper: Received sequence number " 
             + t.getSeqNum() + ", expected " + highestSeqReceived + 1);
+
         // abort if not enough space remaining
         if(wrapper.getReadBuffSpaceRemaining() < t.getPayload().length){
             System.err.println("AsyncReceiveHelper: Buffer overwhelmed");
-            Debug.log(node, "AsyncReceiveHelper: Buffer overwhelmed, " 
-                + "dropping packet with sequence number " + t.getSeqNum());
             return;
         }
 
@@ -71,9 +69,6 @@ public class AsyncReceiveHelper {
         // send ACK
     	try{
     		wrapper.writeToReadBuff(t.getPayload());
-    		Debug.log(node, "AsyncReceiveHelper: Stored " + t.getPayload().length 
-    			+ " bytes in read buffer");
-            Debug.trace(":");
     		sendAck(highestSeqReceived);
     	}catch (BufferOverflowException boe){
     		Debug.log(node, "AsyncReceiveHelper: Read buffer overflowed");
@@ -96,9 +91,6 @@ public class AsyncReceiveHelper {
     	}catch(IllegalArgumentException iae){
             System.err.println("AsyncReceiveHelper: Shouldn't be here" 
             	+ " passed bad args to Transport constructor");
-            System.err.println("ARGS:");
-            System.err.println("\tFROM " + localAddress + ":" + localPort);
-            System.err.println("\tTO " + foreignAddress + ":" + foreignPort);
             iae.printStackTrace();
             return;
         }

@@ -14,23 +14,17 @@ clean:
 	rm -f $(JAVA_FILES:.java=.class)
 	rm -f *~ lib/*~ proj/*~
 
-servertest:
-	perl fishnet.pl simulate 2 scripts/servertest.fish
-
-clienttest:
-	perl fishnet.pl simulate 2 scripts/clienttest.fish
-
-test:
+simpletest:
 	perl fishnet.pl simulate 2 scripts/transfertest.fish
 
-bigtest:
-	perl fishnet.pl simulate 7 scripts/bigtest.fish
+congestion:
+	perl fishnet.pl simulate 7 scripts/congestion-control.fish
+
+no-congestion:
+	perl fishnet.pl simulate 7 scripts/no-congestion-control.fish
 
 buffertest:
 	perl fishnet.pl simulate 3 scripts/buffertest.fish
-
-doubletest:
-	perl fishnet.pl simulate 2 scripts/doubletest.fish
 
 docs:
 	rm -rf javadoc

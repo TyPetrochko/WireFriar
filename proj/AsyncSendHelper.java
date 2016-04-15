@@ -81,7 +81,6 @@ public class AsyncSendHelper{
 
 
         if(transport.getType() != Transport.ACK){
-            System.err.println("AsyncSendHelper: ERROR; somehow received a packet that wasn't an ack");
             return;
         }
 
@@ -113,12 +112,9 @@ public class AsyncSendHelper{
 
             // either congestion or flow may limit window
             cwnd = Math.min(cwnd, transport.getWindow());
-            Debug.log("AsyncSendHelper: CWND = " + cwnd);
-            Debug.log("AsyncSendHelper: ssThresh = " + ssThresh);
         }else{
             // use vanilla flow control
             cwnd = transport.getWindow();
-            Debug.log("AsyncSendHelper: CWND = " + cwnd);
         }
 
         // remove outdated transports
@@ -206,14 +202,10 @@ public class AsyncSendHelper{
     public void goBackN(){
         Debug.log(node, "AsyncSendHelper: Firing goBackN with " 
             + transportBuffer.getAllTransports().size() + " remaining transports in buffer");
-        Debug.log(node, "\tAsyncSendHelper: Highest seq sent = " + highestSeqSent);
-        Debug.log(node, "\tAsyncSendHelper: Highest seq ackd = " + highestSeqConfirmed);
-
+        
         if(CONGESTION_CONTROL){
             ssThresh = (int)(cwnd / 2.0);
             cwnd = Transport.MAX_PAYLOAD_SIZE;
-            Debug.log("AsyncSendHelper: CWND = " + cwnd);
-            Debug.log("AsyncSendHelper: SSTHRESH = " + ssThresh);
         }
 
         if(transportBuffer.getAllTransports().size() == 1){

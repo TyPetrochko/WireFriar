@@ -1,8 +1,0 @@
-AsyncSendHelper: Done flushing, highest seq sent is 469, highest acknowledged is 469
-AsyncReceiveHelper: Terminating everything. Highest Packet received is 469
-Read all remaining bytes - shutting down now!
-TransferServer: Once closed, read 15536 bytes
-Fishnet exiting after time: 1000020 msec.
-Number of packets sent: 16919
-Number of packets dropped: 4186
-Number of packets lost: 2533
